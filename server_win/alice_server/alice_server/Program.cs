@@ -30,7 +30,7 @@ namespace alice_server
         static SerialPort port = new SerialPort("COM16",
           115200, Parity.None, 8, StopBits.One);
 
-        static byte[] command_bytes = new byte[21];
+        static byte[] command_bytes = new byte[20];
 
         [STAThread]
         static void Main(string[] args)
@@ -39,8 +39,8 @@ namespace alice_server
             {
                 command_bytes[i] = 90;
             }
-            command_bytes[20] = Convert.ToByte('\r');
-            command_bytes[LEFT_CLAW] = 10;
+            //command_bytes[20] = Convert.ToByte('\r');
+            command_bytes[LEFT_CLAW] = 0;
             command_bytes[LEFT_ELBOW_PITCH] = 90;
             command_bytes[LEFT_ELBOW_YAW] = 90;
             command_bytes[LEFT_SHOULDER_PITCH] = 90;
@@ -57,8 +57,8 @@ namespace alice_server
             while (true) {
                 try
                 {
-                    port.Write(command_bytes, 0, command_bytes.Length);
-                    Thread.Sleep(1000);
+                    port.WriteLine("\\x" + BitConverter.ToString(command_bytes).Replace("-","\\x"));
+                    Thread.Sleep(10);
                 }
                 catch
                 {
