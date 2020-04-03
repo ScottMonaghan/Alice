@@ -59,14 +59,26 @@ namespace alice_server
             , LEFT_ELBOW_YAW = 2
             , LEFT_SHOULDER_PITCH = 3
             , LEFT_SHOULDER_YAW = 4
+            , HEAD_PITCH = 7
+            , HEAD_YAW = 8
             , RIGHT_CLAW = 11
             , RIGHT_ELBOW_PITCH = 12
             , RIGHT_ELBOW_YAW = 13
             , RIGHT_SHOULDER_PITCH = 14
             , RIGHT_SHOULDER_YAW = 15
-            , HEAD_YAW = 8
-            , HEAD_PITCH = 7
+            , LEFT_WHEEL = 16
+            , RIGHT_WHEEL = 17
+            , MAX_SPEED = 127
+            , MIN_SPEED = 0
+            , MAX_TURN_SPEED = 30
+            , MAX_TURN_ANGLE = 30
+            , MIN_TURN_ANGLE = 10
             ;
+        const double
+            MIN_LEAN = 0.3
+            , MAX_LEAN = 0.8
+            , MAX_TURN_DIFFERENTIAL = 1
+            , Y_LEAN_OFFSET = 0.3;
 
         static KinectSensor _sensor;
         static MultiSourceFrameReader _reader;
@@ -74,6 +86,8 @@ namespace alice_server
         static int framecount = 0;
         static ulong trackingid = 0;
         static RobotJoint[] robotJoints = new RobotJoint[16];
+        static int left_wheel_speed;
+        static int right_wheel_speed;
         static void Reader_MultiSourceFrameArrived(object sender, MultiSourceFrameArrivedEventArgs e)
         {
             var reference = e.FrameReference.AcquireFrame();
@@ -109,9 +123,18 @@ namespace alice_server
                     var left_shoulder = trackedBody.Joints[JointType.ShoulderLeft];
                     var left_elbow = trackedBody.Joints[JointType.ElbowLeft];
                     var left_wrist = trackedBody.Joints[JointType.WristLeft];
+
+                    var left_hip = trackedBody.Joints[JointType.HipLeft];
+                    var right_hip = trackedBody.Joints[JointType.HipRight];
+                    var spine_base = trackedBody.Joints[JointType.SpineBase];
+
                     var left_hand_closed = (trackedBody.HandLeftState == HandState.Closed);
                     var right_hand_closed = (trackedBody.HandRightState == HandState.Closed);
-
+                    var right_hand_open = (trackedBody.HandRightState == HandState.Open);
+                    var left_hand_open = (trackedBody.HandLeftState == HandState.Open);
+                    var lean_x = trackedBody.Lean.X;
+                    var lean_y = trackedBody.Lean.Y + Y_LEAN_OFFSET;
+                    if (lean_y > 1) lean_y = 1;
                     if (spine_shoulder.Position.Z > 0)
                     {
 
@@ -252,7 +275,7 @@ namespace alice_server
                         {
                             robotJoints[RIGHT_CLAW].Angle = 180;
                         }
-                        else
+                        else if (right_hand_open)
                         {
                             robotJoints[RIGHT_CLAW].Angle = 0;
                         }
@@ -261,12 +284,142 @@ namespace alice_server
                         {
                             robotJoints[LEFT_CLAW].Angle = 0;
                         }
-                        else
+                        else if (left_hand_open)
                         {
                             robotJoints[LEFT_CLAW].Angle = 180;
                         }
 
+                        //set wheel speed
+                        //initialize wheel speed to 0
+                        left_wheel_speed = 0;
+                        right_wheel_speed = 0;
 
+            
+                        //first get base speed based on Y lean
+                        int base_speed = 0;
+                        //var lean_range = MAX_LEAN * 2;
+                        if (Math.Abs(lean_y) > MIN_LEAN)
+                        {
+                            if (Math.Abs(lean_y) > MAX_LEAN)
+                            {
+                                if (lean_y > 0) { lean_y = (float)MAX_LEAN; }
+                                else { lean_y = -1 * (float)MAX_LEAN; }
+                            }
+                            base_speed = (int)((lean_y/MAX_LEAN) * MAX_SPEED);
+                            left_wheel_speed = base_speed;
+                            right_wheel_speed = base_speed;
+                            //now do turn
+                            if (lean_x > MIN_LEAN)
+                            {
+                                //leaning right, so slow right wheel for right turn.
+                                right_wheel_speed = (int)((1 - ((-1 * lean_x) / MAX_LEAN) * MAX_TURN_DIFFERENTIAL) * right_wheel_speed);
+                            }
+                            else if (lean_x < (MIN_LEAN * -1))
+                            {
+                                //leaning left, so slow left wheel for left turn.
+                                left_wheel_speed = (int)((1 - (lean_x / MAX_LEAN) * MAX_TURN_DIFFERENTIAL) * left_wheel_speed);
+                            }
+
+                        } else if (lean_x > MIN_LEAN)
+                            {
+                                //leaning right, so slow right wheel for right turn.
+                                right_wheel_speed = 0;
+                                left_wheel_speed = (int)((lean_x / MAX_LEAN) * MAX_TURN_SPEED);
+                            }
+                         else if (lean_x < (MIN_LEAN * -1))
+                            {
+                                //leaning left, so slow left wheel for left turn.
+                                left_wheel_speed = 0;
+                                right_wheel_speed = (int)(((-1*lean_x) / MAX_LEAN) * MAX_TURN_SPEED);
+                         } else
+                        {
+                            left_wheel_speed = 0;
+                            left_wheel_speed = 0;
+                        }
+                        
+                        
+
+                        
+
+                        
+                        
+
+                        //now adjust speed based on shoulder angle
+                        //first get shoulder angle
+                        //Joint front_hip;
+                        //Joint back_hip;
+
+                        //if (left_hip.Position.Z < right_hip.Position.Z)
+                        //{
+                        //    front_hip = left_hip;
+                        //    back_hip = right_hip;
+                        //} else
+                        //{
+                        //    front_hip = right_hip;
+                        //    back_hip = left_hip;
+                        //}
+
+                        //var hip_angle = Get3DAngle(
+                        //        front_hip.Position.ToVector3(),
+                        //        back_hip.Position.ToVector3(),
+                        //        new Vector3D(back_hip.Position.X - 1, back_hip.Position.Y, back_hip.Position.Z)
+                        //    );
+
+                        //if (right_hip == front_hip)
+                        //{
+                        //    hip_angle = 180 - hip_angle;
+                        //}
+
+                        //if (hip_angle > MAX_TURN_ANGLE) { hip_angle = MAX_TURN_ANGLE; }
+
+                        //if (hip_angle > MIN_TURN_ANGLE)
+                        //{
+                        //    //lets turn!
+
+                        //    //lets figure out the multiplier for the turn
+                        //    var turn_multiplier = hip_angle / MAX_TURN_ANGLE; 
+
+                        //    //if (right_hip == front_hip) { turn_multiplier *= -1; }
+
+                        //    var turn_speed_delta = (int)(MAX_TURN_SPEED * turn_multiplier);
+
+                        //    if (right_hip == front_hip)
+                        //    {
+                        //        left_wheel_speed -= turn_speed_delta;
+                        //    }
+                        //    else
+                        //    {
+                        //        right_wheel_speed -= turn_speed_delta;
+                        //    }
+
+                        //}
+
+                        //make sure neither wheel is greater than max speed
+                        if (Math.Abs(left_wheel_speed) > MAX_SPEED)
+                        {
+                            if(left_wheel_speed>0) {
+                                left_wheel_speed = MAX_SPEED;
+                            } else
+                            {
+                                left_wheel_speed = -1 * MAX_SPEED;
+                            }
+                        }
+                        //make sure neither wheel is greater than max speed
+                        if (Math.Abs(right_wheel_speed) > MAX_SPEED)
+                        {
+                            if (right_wheel_speed > 0)
+                            {
+                                right_wheel_speed = MAX_SPEED;
+                            }
+                            else
+                            {
+                                right_wheel_speed = -1 * MAX_SPEED;
+                            }
+                        }
+
+
+                        //Console.Write("\r" + hip_angle);
+                        Console.Write("\rlws: " + left_wheel_speed + "\t\trws: " + right_wheel_speed + "\t\t");
                     }
                 }
             }
@@ -307,7 +460,13 @@ namespace alice_server
 
             return angle.ToDegrees();
         }
-
+        static byte ConvertSignedIntToByte(int signedInt)
+        {
+            var returnByte = signedInt + 127;
+            if (returnByte > 255) { return 255; }
+            if (returnByte < 0 ) { return 0; }
+            return (byte)returnByte;
+        }
         static Vector RotatePoint(Vector point0, double theta)
         {
             ////|cos(theta) -sin(theta)|   |X0|   |X1| 
@@ -327,7 +486,8 @@ namespace alice_server
             return point1;
         }
         // Create the serial port with basic settings
-        static SerialPort port = new SerialPort("COM16",
+        //com 11 for Feather M4
+        static SerialPort port = new SerialPort("COM11",
           9600, Parity.None, 8, StopBits.One);
 
         static byte[] command_bytes = new byte[20];
@@ -489,6 +649,8 @@ namespace alice_server
             command_bytes[RIGHT_ELBOW_YAW] = 90;
             command_bytes[RIGHT_SHOULDER_PITCH] = 90;
             command_bytes[RIGHT_SHOULDER_YAW] = 90;
+            command_bytes[RIGHT_WHEEL] = ConvertSignedIntToByte(0);
+            command_bytes[LEFT_WHEEL] = ConvertSignedIntToByte(0);
             // Kinect sensor initialization
             _sensor = KinectSensor.GetDefault();
 
@@ -518,22 +680,24 @@ namespace alice_server
                     command_bytes[LEFT_ELBOW_PITCH] = (byte)robotJoints[LEFT_ELBOW_PITCH].Angle;
                     command_bytes[RIGHT_CLAW] = (byte)robotJoints[RIGHT_CLAW].Angle;
                     command_bytes[LEFT_CLAW] = (byte)robotJoints[LEFT_CLAW].Angle;
-                    Console.Write(
-                        "\rRSY:" + (int)command_bytes[RIGHT_SHOULDER_YAW]
-                        + "\tRSP:" + (int)command_bytes[RIGHT_SHOULDER_PITCH]
-                        + "\tREY:" + (int)command_bytes[RIGHT_ELBOW_YAW]
-                        + "\tREP:" + (int)command_bytes[RIGHT_ELBOW_PITCH]
-                        + "\tLSP:" + (int)command_bytes[LEFT_SHOULDER_PITCH]
-                        + "\tLSY:" + (int)command_bytes[LEFT_SHOULDER_YAW]
-                        + "\tLEY:" + (int)command_bytes[LEFT_ELBOW_YAW]
-                        + "\tLEP:" + (int)command_bytes[LEFT_ELBOW_PITCH]
-                        + "\t");
+                    command_bytes[RIGHT_WHEEL] = ConvertSignedIntToByte(right_wheel_speed);
+                    command_bytes[LEFT_WHEEL] = ConvertSignedIntToByte(left_wheel_speed);
+                    //Console.Write(
+                    //    "\rRSY:" + (int)command_bytes[RIGHT_SHOULDER_YAW]
+                    //    + "\tRSP:" + (int)command_bytes[RIGHT_SHOULDER_PITCH]
+                    //    + "\tREY:" + (int)command_bytes[RIGHT_ELBOW_YAW]
+                    //    + "\tREP:" + (int)command_bytes[RIGHT_ELBOW_PITCH]
+                    //    + "\tLSP:" + (int)command_bytes[LEFT_SHOULDER_PITCH]
+                    //    + "\tLSY:" + (int)command_bytes[LEFT_SHOULDER_YAW]
+                    //    + "\tLEY:" + (int)command_bytes[LEFT_ELBOW_YAW]
+                    //    + "\tLEP:" + (int)command_bytes[LEFT_ELBOW_PITCH]
+                    //    + "\t");
                     port.WriteLine("\\x" + BitConverter.ToString(command_bytes).Replace("-","\\x"));
                     //Thread.Sleep(250);
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e.Message);
+                    //Console.Write("\r" + e.Message + "\t\t\t\t");
                     port.Close();
                     port.Open();
                 }
@@ -548,8 +712,8 @@ namespace alice_server
             port.DtrEnable = true;
             port.NewLine = "\r";
             port.Encoding = Encoding.UTF8;
-            port.WriteTimeout = 250;
-            //port.ReadTimeout = 100;
+            port.WriteTimeout = 500;
+            port.ReadTimeout = 500;
 
             // Attach a method to be called when there
             // is data waiting in the port's buffer
