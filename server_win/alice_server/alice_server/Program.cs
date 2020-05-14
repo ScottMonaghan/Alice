@@ -61,7 +61,8 @@ namespace alice_server
             , LEFT_SHOULDER_YAW = 4
             , HEAD_PITCH = 7
             , HEAD_YAW = 8
-            , RIGHT_CLAW = 11
+            , RIGHT_GRIPPER = 10
+            , RIGHT_WRIST = 11
             , RIGHT_ELBOW_PITCH = 12
             , RIGHT_ELBOW_YAW = 13
             , RIGHT_SHOULDER_PITCH = 14
@@ -70,7 +71,7 @@ namespace alice_server
             , RIGHT_WHEEL = 17
             , MAX_SPEED = 127
             , MIN_SPEED = 0
-            , MAX_TURN_SPEED = 30
+            , MAX_TURN_SPEED = 70
             , MAX_TURN_ANGLE = 30
             , MIN_TURN_ANGLE = 10
             ;
@@ -273,11 +274,11 @@ namespace alice_server
                         //claws
                         if (right_hand_closed)
                         {
-                            robotJoints[RIGHT_CLAW].Angle = 180;
+                            robotJoints[RIGHT_GRIPPER].Angle = 180;
                         }
                         else if (right_hand_open)
                         {
-                            robotJoints[RIGHT_CLAW].Angle = 0;
+                            robotJoints[RIGHT_GRIPPER].Angle = 0;
                         }
 
                         if (left_hand_closed)
@@ -337,63 +338,6 @@ namespace alice_server
                             left_wheel_speed = 0;
                         }
                         
-                        
-
-                        
-
-                        
-                        
-
-                        //now adjust speed based on shoulder angle
-                        //first get shoulder angle
-                        //Joint front_hip;
-                        //Joint back_hip;
-
-                        //if (left_hip.Position.Z < right_hip.Position.Z)
-                        //{
-                        //    front_hip = left_hip;
-                        //    back_hip = right_hip;
-                        //} else
-                        //{
-                        //    front_hip = right_hip;
-                        //    back_hip = left_hip;
-                        //}
-
-                        //var hip_angle = Get3DAngle(
-                        //        front_hip.Position.ToVector3(),
-                        //        back_hip.Position.ToVector3(),
-                        //        new Vector3D(back_hip.Position.X - 1, back_hip.Position.Y, back_hip.Position.Z)
-                        //    );
-
-                        //if (right_hip == front_hip)
-                        //{
-                        //    hip_angle = 180 - hip_angle;
-                        //}
-
-                        //if (hip_angle > MAX_TURN_ANGLE) { hip_angle = MAX_TURN_ANGLE; }
-
-                        //if (hip_angle > MIN_TURN_ANGLE)
-                        //{
-                        //    //lets turn!
-
-                        //    //lets figure out the multiplier for the turn
-                        //    var turn_multiplier = hip_angle / MAX_TURN_ANGLE; 
-
-                        //    //if (right_hip == front_hip) { turn_multiplier *= -1; }
-
-                        //    var turn_speed_delta = (int)(MAX_TURN_SPEED * turn_multiplier);
-
-                        //    if (right_hip == front_hip)
-                        //    {
-                        //        left_wheel_speed -= turn_speed_delta;
-                        //    }
-                        //    else
-                        //    {
-                        //        right_wheel_speed -= turn_speed_delta;
-                        //    }
-
-                        //}
-
                         //make sure neither wheel is greater than max speed
                         if (Math.Abs(left_wheel_speed) > MAX_SPEED)
                         {
@@ -603,7 +547,21 @@ namespace alice_server
                 ,
                 Angle = 90
             };
-            robotJoints[RIGHT_CLAW] = new RobotJoint()
+            robotJoints[RIGHT_WRIST] = new RobotJoint()
+            {
+                MaxAngle = 180
+                ,
+                MinAngle = 0
+                ,
+                InvertKinectAngle = false
+                ,
+                KinectAngleOffset = 0
+                ,
+                StartingAngle = 0
+                ,
+                Angle = 0
+            };
+            robotJoints[RIGHT_GRIPPER] = new RobotJoint()
             {
                 MaxAngle = 180
                 ,
@@ -644,7 +602,8 @@ namespace alice_server
             command_bytes[LEFT_SHOULDER_YAW] = 90;
             command_bytes[HEAD_PITCH] = 90;
             command_bytes[HEAD_YAW] = 90;
-            command_bytes[RIGHT_CLAW] = 90;
+            command_bytes[RIGHT_WRIST] = 90;
+            command_bytes[RIGHT_GRIPPER] = 0;
             command_bytes[RIGHT_ELBOW_PITCH] = 90;
             command_bytes[RIGHT_ELBOW_YAW] = 90;
             command_bytes[RIGHT_SHOULDER_PITCH] = 90;
@@ -678,10 +637,11 @@ namespace alice_server
                     command_bytes[LEFT_SHOULDER_YAW] = (byte)robotJoints[LEFT_SHOULDER_YAW].Angle;
                     command_bytes[LEFT_ELBOW_YAW] = (byte)robotJoints[LEFT_ELBOW_YAW].Angle;
                     command_bytes[LEFT_ELBOW_PITCH] = (byte)robotJoints[LEFT_ELBOW_PITCH].Angle;
-                    command_bytes[RIGHT_CLAW] = (byte)robotJoints[RIGHT_CLAW].Angle;
+                    command_bytes[RIGHT_WRIST] = (byte)robotJoints[RIGHT_WRIST].Angle;
                     command_bytes[LEFT_CLAW] = (byte)robotJoints[LEFT_CLAW].Angle;
                     command_bytes[RIGHT_WHEEL] = ConvertSignedIntToByte(right_wheel_speed);
                     command_bytes[LEFT_WHEEL] = ConvertSignedIntToByte(left_wheel_speed);
+                    command_bytes[RIGHT_GRIPPER] = (byte)robotJoints[RIGHT_GRIPPER].Angle;
                     //Console.Write(
                     //    "\rRSY:" + (int)command_bytes[RIGHT_SHOULDER_YAW]
                     //    + "\tRSP:" + (int)command_bytes[RIGHT_SHOULDER_PITCH]
