@@ -42,11 +42,73 @@ Implementation Notes
 
 import board
 from adafruit_pca9685 import PCA9685
+try:
+    import struct
+except ImportError:
+    import ustruct as struct
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_ServoKit.git"
+class PWMChannel:
+    """A single PCA9685 channel that matches the :py:class:`~pulseio.PWMOut` API."""
+    def __init__(self,pca,index):
+        self._pca = pca
+        self._index = index
+        self._duty_cycle = (0,0x1000)
+		
+    @property
+    def frequency(self):
+        """The overall PWM frequency in Hertz (read-only).
+        A PWMChannel's frequency cannot be set individually.
+        All channels share a common frequency, set by PCA9685.frequency."""
+        return self._pca.frequency
 
+    @frequency.setter
+    def frequency(self, _):
+        raise NotImplementedError("frequency cannot be set on individual channels")
 
+    @property
+    def duty_cycle(self):
+        """16 bit value that dictates how much of one cycle is high (1) versus low (0). 0xffff will
+           always be high, 0 will always be low and 0x7fff will be half high and then half low."""
+        #return self._duty_cycle
+        pwm = self._duty_cycle
+        if pwm[0] == 0x1000:
+            return 0xffff
+        return pwm[1] << 4
+    
+    @duty_cycle.setter
+    def duty_cycle(self, value):
+        if not 0 <= value <= 0xffff:
+            raise ValueError("Out of range")
+        #self._duty_cycle = value
+        if value == 0xffff:
+            self._duty_cycle = (0x1000, 0)
+        else:
+            # Shift our value by four because the PCA9685 is only 12 bits but our value is 16
+            value = (value + 1) >> 4
+            self._duty_cycle = (0, value)
+
+class PCAChannels: # pylint: disable=too-few-public-methods
+    """Lazily creates and caches channel objects as needed. Treat it like a sequence."""
+    def __init__(self, pca):
+        self._pca = pca
+        self._channels = [None] * len(self)
+
+    def __len__(self):
+        return 16
+
+    def __getitem__(self, index):
+        if not self._channels[index]:
+            self._channels[index] = PWMChannel(self._pca, index)
+        return self._channels[index]
+    def get_duty_cycles(self):       
+        duty_cycles = [None] * len(self)
+        for i, channel in enumerate(self):
+            duty_cycles[i] = channel._duty_cycle
+        return duty_cycles
+        
+    
 class ServoKit:
     """Class representing an Adafruit PWM/Servo FeatherWing, Shield or Pi HAT and Bonnet kits.
        Automatically uses the I2C bus on a Feather, Metro or Raspberry Pi.
@@ -74,7 +136,22 @@ class ServoKit:
 
         self._servo = _Servo(self)
         self._continuous_servo = _ContinuousServo(self)
+        self._pcaChannels = PCAChannels(self._pca)
 
+    def setServos(self):
+        #get the buffer
+        first_register = 0x06 #first LED/Servo register of the PCA
+        struct_format = '<HH'
+        buf = bytearray(1) #one byte for the initial register address followed by PCA's 16 4-byte registers 
+        buf[0] = first_register
+        duty_cycles = self._pcaChannels.get_duty_cycles()
+        for duty_cycle in duty_cycles:
+            pwm_reg = bytearray(struct.calcsize(struct_format)) 
+            struct.pack_into(struct_format, pwm_reg, 0, *duty_cycle)
+            buf = buf + pwm_reg
+        with self._pca.i2c_device:
+            self._pca.i2c_device.write(buf)
+        
     @property
     def servo(self):
         """:py:class:``~adafruit_motor.servo.Servo`` controls for standard servos.
@@ -121,7 +198,8 @@ class _Servo:
             raise ValueError("servo must be 0-{}!".format(num_channels - 1))
         servo = self.kit._items[servo_channel]
         if servo is None:
-            servo = adafruit_motor.servo.Servo(self.kit._pca.channels[servo_channel],min_pulse=750,max_pulse=2500)
+            servo = adafruit_motor.servo.Servo(self.kit._pcaChannels[servo_channel],min_pulse=750,max_pulse=2500)
+            #servo = adafruit_motor.servo.Servo(self.kit._pca.channels[servo_channel],min_pulse=750,max_pulse=2500)
             self.kit._items[servo_channel] = servo
             return servo
         if isinstance(self.kit._items[servo_channel], adafruit_motor.servo.Servo):

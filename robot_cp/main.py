@@ -5,7 +5,7 @@ from time import sleep, monotonic
 import board
 import pulseio
 from digitalio import DigitalInOut, Direction, Pull
-from adafruit_motor import motor
+from adafruit_motor import motor, servo
 from adafruit_servokit_alice import ServoKit
 import adafruit_rfm9x
 from analogio import AnalogIn
@@ -44,7 +44,7 @@ HEAD_PITCH =7
 
 LEFT_WHEEL = 16
 RIGHT_WHEEL = 17
-
+        
 class Gripper:
     def __init__(self, servo, sensor):
         self.servo = servo
@@ -188,6 +188,7 @@ def set_orientation(command_bytes, smoothing = False):
     #set gripper
     right_gripper.move_gripper(command_bytes[GRIPPER_SERVO + INDEX_OFFSET]) 
 	
+    servokit.setServos()
 command_bytes = [90] * 64
 
 command_bytes[LEFT_CLAW] = 90
