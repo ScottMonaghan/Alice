@@ -10,10 +10,12 @@ from adafruit_servokit_alice import ServoKit
 import adafruit_rfm9x
 from analogio import AnalogIn
 import math
+from  random import random
+from adafruit_ht16k33.matrix import Matrix8x8
  
 #constants
 MIN_ANGLE_CHANGE = 3
-SMOOTHING_ANGLE = 45
+SMOOTHING_ANGLE = 2
 MAX_SPEED = 0.5
 DELAY_THROTTLE = 0.4
 MIN_SPEED = 0.35
@@ -34,6 +36,7 @@ LEFT_ELBOW_PITCH = 1
 LEFT_ELBOW_YAW = 2
 LEFT_SHOULDER_PITCH = 3
 LEFT_SHOULDER_YAW = 4
+LEFT_WRIST = 5
 RIGHT_WRIST = 11
 RIGHT_ELBOW_PITCH = 12
 RIGHT_ELBOW_YAW = 13
@@ -113,20 +116,27 @@ class Wheel:
 
 servokit = ServoKit(channels=16)
 
+#initialize LoRa radio
+spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
+radio_nss = DigitalInOut(board.A5)
+radio_reset = DigitalInOut(board.A4)
+radio = adafruit_rfm9x.RFM9x(spi, radio_nss, radio_reset, 915.0)
+
 ##initialize gripper
-right_gripper_sensor = DigitalInOut(board.D5)
+right_gripper_sensor = DigitalInOut(board.D12)
 right_gripper_sensor.direction = Direction.INPUT
 right_gripper_sensor.pull = Pull.DOWN
 right_gripper = Gripper(servokit.servo[GRIPPER_SERVO],right_gripper_sensor)
 
 ##initialize wheel motors
-wheels_sleep = DigitalInOut(board.D12)
+ain1 = pulseio.PWMOut(board.D5)
+ain2 = pulseio.PWMOut(board.D6)
+wheels_sleep = DigitalInOut(board.D9)
+bin2 = pulseio.PWMOut(board.D10)
+bin1 = pulseio.PWMOut(board.D11)
+
 wheels_sleep.direction = Direction.OUTPUT
 wheels_sleep.value = True
-ain1 = pulseio.PWMOut(board.D11)
-ain2 = pulseio.PWMOut(board.D10)
-bin1 = pulseio.PWMOut(board.D6)
-bin2 = pulseio.PWMOut(board.D9)
 left_wheel_motor = motor.DCMotor(ain1,ain2)
 right_wheel_motor = motor.DCMotor(bin1,bin2)
 left_wheel_motor.throttle = 0
@@ -134,17 +144,9 @@ right_wheel_motor.throttle = 0
 left_wheel = Wheel(left_wheel_motor)
 right_wheel = Wheel(right_wheel_motor)
 
-#initialize LoRa radio
-spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
-radio_nss = DigitalInOut(board.A4)
-radio_reset = DigitalInOut(board.A2)
-radio = adafruit_rfm9x.RFM9x(spi, radio_nss, radio_reset, 915.0)
-
-#battery management
+##battery management
 vbat_voltage = AnalogIn(board.VOLTAGE_MONITOR)
- 
-
-		
+ 	
 def get_voltage(pin):
     return (pin.value * 3.3) / 65536 * 2
 
@@ -165,22 +167,24 @@ def move_servo(index,command_bytes,index_offset = 0, smoothing=False):
             else:
                 servo.angle = new_angle
             
-        except ValueError as e: print(e)
+        except Error as e: print(e)
 
 def set_orientation(command_bytes, smoothing = False):
     #move arms and head
-    move_servo(LEFT_CLAW, command_bytes, INDEX_OFFSET, smoothing)
+    # move_servo(LEFT_CLAW, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(LEFT_ELBOW_PITCH, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(LEFT_ELBOW_YAW, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(LEFT_SHOULDER_PITCH, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(LEFT_SHOULDER_YAW, command_bytes, INDEX_OFFSET, smoothing)
+    move_servo(LEFT_WRIST, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(HEAD_PITCH, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(HEAD_YAW, command_bytes, INDEX_OFFSET, smoothing)
-    move_servo(RIGHT_WRIST, command_bytes, INDEX_OFFSET, smoothing)
+#     move_servo(RIGHT_WRIST, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(RIGHT_ELBOW_PITCH, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(RIGHT_ELBOW_YAW, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(RIGHT_SHOULDER_PITCH, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(RIGHT_SHOULDER_YAW, command_bytes, INDEX_OFFSET,smoothing)
+    move_servo(RIGHT_WRIST, command_bytes, INDEX_OFFSET,smoothing)
 
     #set wheel speed
     left_wheel.set_wheel_speed(command_bytes[LEFT_WHEEL+ INDEX_OFFSET])
@@ -189,45 +193,332 @@ def set_orientation(command_bytes, smoothing = False):
     right_gripper.move_gripper(command_bytes[GRIPPER_SERVO + INDEX_OFFSET]) 
 	
     servokit.setServos()
-command_bytes = [90] * 64
 
+
+#BEGIN EYES
+#eye direction constants
+LOOK_CENTER = 0
+LOOK_UP = 1
+LOOK_DOWN = -1
+LOOK_RIGHT = 1
+LOOK_LEFT = -1
+
+EYE_BLINK_DURATION = 0.1
+EYE_BLINK_MIN_DELAY = 2
+EYE_BLINK_CHANCE = 0.5
+i2c = board.I2C()
+right_eye = Matrix8x8(i2c, auto_write=False)
+right_eye.brightness = 1
+right_eye.fill(1)
+left_eye = Matrix8x8(i2c, address=0x71, auto_write=False)
+left_eye.brightness = 1
+right_eye.fill(1)
+def setMatrixframe(right_eye, left_eye, right_frame, left_frame):
+    right_eye.fill(1)
+    for y in range(len(right_frame)):
+        for x in range(len(right_frame[y])):
+            right_eye[y,x] = right_frame[x][y]
+    left_eye.fill(1)
+    for y in range(len(left_frame)):
+        for x in range(len(left_frame[y])):
+            left_eye[y,x] = left_frame[x][y]
+
+def setEyeFrameByDirection(eye_direction): 
+    global current_left_frame, current_right_frame, update_eyes
+    
+    new_left_frame = current_left_frame
+    new_right_frame = current_right_frame
+    
+    if eye_direction == [LOOK_CENTER, LOOK_CENTER]:
+        new_left_frame = frame_left_eye_forward
+        new_right_frame = frame_right_eye_forward    
+    if eye_direction == [LOOK_LEFT, LOOK_CENTER]:
+        new_left_frame = frame_look_left
+        new_right_frame = frame_look_left    
+    if eye_direction == [LOOK_RIGHT, LOOK_CENTER]:
+        new_left_frame = frame_look_right
+        new_right_frame = frame_look_right    
+    if eye_direction == [LOOK_CENTER, LOOK_UP]:
+        new_left_frame = frame_left_eye_up
+        new_right_frame = frame_right_eye_up    
+    if eye_direction == [LOOK_LEFT, LOOK_UP]:
+        new_left_frame = frame_look_up_left
+        new_right_frame = frame_look_up_left    
+    if eye_direction == [LOOK_RIGHT, LOOK_UP]:
+        new_left_frame = frame_look_up_right
+        new_right_frame = frame_look_up_right    
+    if eye_direction == [LOOK_CENTER, LOOK_DOWN]:
+        new_left_frame = frame_left_eye_down
+        new_right_frame = frame_right_eye_down    
+    if eye_direction == [LOOK_LEFT, LOOK_DOWN]:
+        new_left_frame = frame_look_down_left
+        new_right_frame = frame_look_down_left    
+    if eye_direction == [LOOK_RIGHT, LOOK_DOWN]:
+        new_left_frame = frame_look_down_right
+        new_right_frame = frame_look_down_right    
+    if new_left_frame != current_left_frame or new_right_frame != current_right_frame:
+        current_left_frame = new_left_frame
+        current_right_frame = new_right_frame
+        update_eyes = True
+
+def getEyeDirectionByOrientation():
+    eye_x = LOOK_CENTER
+    eye_y = LOOK_CENTER
+    x_tolerance = 10
+    y_tolerance = 10 
+    
+    #first set eye_x based on whether head is currently moving left or right 
+    if command_bytes[HEAD_YAW + INDEX_OFFSET] < servokit.servo[HEAD_YAW].angle - x_tolerance:
+        eye_x = LOOK_LEFT
+    elif command_bytes[HEAD_YAW + INDEX_OFFSET] > servokit.servo[HEAD_YAW].angle + x_tolerance:
+        eye_x = LOOK_RIGHT
+    
+    #next we set eye_y whether the angle is up center or down. Unlike x, y stays in place even after reached.
+    if command_bytes[HEAD_PITCH + INDEX_OFFSET] > 90 + y_tolerance:
+        eye_y = LOOK_UP
+    if command_bytes[HEAD_PITCH + INDEX_OFFSET] < 90 - y_tolerance:
+        eye_y = LOOK_DOWN
+    
+    
+    return [eye_x, eye_y]
+    
+    
+
+frame_right_eye_forward = [
+    [0,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1],
+    [1,1,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0],
+    [1,0,0,0,0,0,0,0],
+    [1,0,0,0,0,0,0,0],
+    [1,0,0,0,0,0,0,0],
+    [0,1,0,0,0,0,0,0]
+]
+frame_left_eye_forward = [
+    [0,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,0,1],
+    [0,0,0,0,0,0,0,1],
+    [0,0,0,0,0,0,0,1],
+    [0,0,0,0,0,0,0,1],
+    [0,0,0,0,0,0,1,0]
+]
+frame_right_eye_up = [
+    [0,1,0,0,0,0,0,0],
+    [1,0,0,0,0,0,0,0],
+    [1,0,0,0,0,0,0,0],
+    [1,0,0,0,0,0,0,0],
+    [1,0,0,0,0,0,0,0],
+    [1,1,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1,0]
+]
+frame_left_eye_up = [
+    [0,0,0,0,0,0,1,0],
+    [0,0,0,0,0,0,0,1],
+    [0,0,0,0,0,0,0,1],
+    [0,0,0,0,0,0,0,1],
+    [0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,1,1],
+    [1,1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1,0],
+]
+frame_right_eye_down = [
+    [0,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1],
+    [1,1,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,0],
+    [1,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+]
+frame_left_eye_down = [
+    [0,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,0,1],
+    [0,0,0,0,0,0,0,1],
+    [0,0,0,0,0,0,0,0],
+]
+
+frame_look_right = [
+    [0,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1],
+    [1,1,1,0,0,0,0,1],
+    [1,1,0,0,0,0,0,0],
+    [1,1,0,0,0,0,0,0],
+    [1,1,0,0,0,0,0,0],
+    [1,1,0,0,0,0,0,0],
+    [0,1,1,0,0,0,0,0]
+]
+
+frame_look_left = [
+    [0,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,1,1,1],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,1,1,0]
+]
+
+frame_look_up_right = [
+    [0,1,1,0,0,0,0,0],
+    [1,1,0,0,0,0,0,0],
+    [1,1,0,0,0,0,0,0],
+    [1,1,0,0,0,0,0,0],
+    [1,1,0,0,0,0,0,0],
+    [1,1,1,0,0,0,0,0],
+    [1,1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1,0]
+]
+
+frame_look_up_left = [
+    [0,0,0,0,0,1,1,0],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,1,1,1],
+    [1,1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1,0]
+]
+frame_look_down_right = [
+    [0,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1],
+    [1,1,1,0,0,0,0,0],
+    [1,1,0,0,0,0,0,0],
+    [1,1,0,0,0,0,0,0],
+    [0,1,0,0,0,0,0,0],
+]
+frame_look_down_left = [
+    [0,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1],
+    [0,0,0,0,0,1,1,1],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,1,1],
+    [0,0,0,0,0,0,1,0],
+]
+
+
+frame_blink = [
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [1,1,1,1,1,1,1,1],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0]
+]
+
+command_bytes = [90] * 64
 command_bytes[LEFT_CLAW] = 90
-command_bytes[LEFT_ELBOW_PITCH] = 90
+command_bytes[LEFT_ELBOW_PITCH] = 135
 command_bytes[LEFT_ELBOW_YAW] = 90
-command_bytes[LEFT_SHOULDER_PITCH] = 90
-command_bytes[LEFT_SHOULDER_YAW] = 90
-command_bytes[HEAD_PITCH] = 45
+command_bytes[LEFT_SHOULDER_PITCH] = 180
+command_bytes[LEFT_SHOULDER_YAW] = 135
+command_bytes[HEAD_PITCH] = 90
 command_bytes[HEAD_YAW] = 90
-command_bytes[RIGHT_WRIST] = 45
-command_bytes[RIGHT_ELBOW_PITCH] = 90
+command_bytes[RIGHT_WRIST] = 90
+command_bytes[RIGHT_ELBOW_PITCH] = 55
 command_bytes[RIGHT_ELBOW_YAW] = 90
 command_bytes[RIGHT_SHOULDER_PITCH] = 0
 command_bytes[RIGHT_SHOULDER_YAW] = 45
 command_bytes[LEFT_WHEEL] = 0 + 127
 command_bytes[RIGHT_WHEEL] = 0 + 127
 command_bytes[GRIPPER_SERVO] = GRIPPER_OPEN_ANGLE
-
+command_bytes[LEFT_WRIST] = 90
 
 INDEX_OFFSET = 0
+
+update_eyes = False
+current_right_frame = None
+current_left_frame = None
+eye_direction=[LOOK_CENTER, LOOK_CENTER]
+setEyeFrameByDirection(eye_direction)
 
 #main loop
 PACKET_SIGNATURE = "ALICE"
 INDEX_OFFSET = len(PACKET_SIGNATURE)
 command_bytes = bytearray(PACKET_SIGNATURE) + bytearray(command_bytes)
 set_orientation(command_bytes)
+setMatrixframe(right_eye, left_eye, current_right_frame, current_left_frame)
+right_eye.show()
+left_eye.show()
+sleep(1)
+eye_blink_timer = monotonic()
+eyes_blinking = False
+lastHeadMovement = None
+demo=True
 while True:
     loopStart = monotonic()
+    if demo:
+        if (lastHeadMovement == None or loopStart-lastHeadMovement > 1):
+            if random() > 0.5:
+                if random() > 0.3:
+                    command_bytes[HEAD_PITCH + INDEX_OFFSET] = int(random()*90) + 45
+                    command_bytes[HEAD_YAW + INDEX_OFFSET] = int(random()*90) + 45
+                if random() > 0.67:
+                    command_bytes[RIGHT_ELBOW_PITCH + INDEX_OFFSET] = 135-int(random()*90)
+                    command_bytes[RIGHT_SHOULDER_PITCH + INDEX_OFFSET] = 55 + int(random()*91)
+                    command_bytes[RIGHT_SHOULDER_YAW + INDEX_OFFSET] = 45 + int(random()*45)                    
+                    command_bytes[RIGHT_WRIST + INDEX_OFFSET] = int(random()*181)
+#                     command_bytes[RIGHT_CLAW + INDEX_OFFSET] = int(random()*181)
+                if random() > 0.67:
+                    command_bytes[LEFT_SHOULDER_YAW + INDEX_OFFSET] = 135 - int(random()*45)                    
+                    command_bytes[LEFT_SHOULDER_PITCH + INDEX_OFFSET] = int(random()*91)+90
+                    command_bytes[LEFT_ELBOW_PITCH + INDEX_OFFSET] = 135 - int(random()*90)
+                    command_bytes[LEFT_WRIST + INDEX_OFFSET] = int(random()*181)
+                    command_bytes[LEFT_CLAW + INDEX_OFFSET] = int(random()*181)
+            lastHeadMovement = loopStart
     packet = None
-    packet = radio.receive(timeout=0)  # Wait for a packet to be received (up to 0.5 seconds)
-    if packet is not None:
-         try:
-            if len(packet) > 0: 
-                signature_check = ''
-                for i in range(INDEX_OFFSET):
-                    signature_check+=chr(packet[i])
-                if signature_check == PACKET_SIGNATURE:
-                    command_bytes = packet
-         except UnicodeError as e:
-             print("UnicodeError")
+    packet = radio.receive(timeout=0)  
+    try:
+        if packet !=None and len(packet) > 0: 
+            signature_check = ''
+            for i in range(INDEX_OFFSET):
+                signature_check+=chr(packet[i])
+            if signature_check == PACKET_SIGNATURE:
+                command_bytes = packet
+    except UnicodeError as e:
+        print("UnicodeError")
+    
     set_orientation(command_bytes=command_bytes,smoothing=True)
+    setEyeFrameByDirection(getEyeDirectionByOrientation())
+    #blinking   
+    if not eyes_blinking: 
+        if loopStart - eye_blink_timer > EYE_BLINK_MIN_DELAY: 
+            if random() < EYE_BLINK_CHANCE:
+                previous_left_frame = current_left_frame
+                previous_right_frame = current_right_frame
+                current_right_frame = frame_blink
+                current_left_frame = frame_blink
+                eye_blink_timer = loopStart
+                eyes_blinking = True
+                update_eyes = True
+            else: 
+                #restart blink timer
+                eye_blink_timer = loopStart
+    elif eyes_blinking and loopStart - eye_blink_timer > EYE_BLINK_DURATION:
+        current_right_frame = previous_right_frame
+        current_left_frame = previous_left_frame
+        eye_blink_timer = loopStart
+        eyes_blinking = False
+        update_eyes = True 
+    if update_eyes:
+        setMatrixframe(right_eye, left_eye, current_right_frame, current_left_frame)
+        right_eye.show()
+        left_eye.show()
+        update_eyes = False
+
     print (str(monotonic() - loopStart))
