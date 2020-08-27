@@ -59,6 +59,7 @@ namespace alice_server
             , LEFT_ELBOW_YAW = 2
             , LEFT_SHOULDER_PITCH = 3
             , LEFT_SHOULDER_YAW = 4
+            , LEFT_WRIST = 5
             , HEAD_PITCH = 7
             , HEAD_YAW = 8
             , RIGHT_GRIPPER = 10
@@ -124,6 +125,8 @@ namespace alice_server
                     var left_shoulder = trackedBody.Joints[JointType.ShoulderLeft];
                     var left_elbow = trackedBody.Joints[JointType.ElbowLeft];
                     var left_wrist = trackedBody.Joints[JointType.WristLeft];
+                    var left_thumb = trackedBody.Joints[JointType.ThumbLeft];
+                    var left_hand_tip = trackedBody.Joints[JointType.HandTipLeft];
 
                     var left_hip = trackedBody.Joints[JointType.HipLeft];
                     var right_hip = trackedBody.Joints[JointType.HipRight];
@@ -243,14 +246,16 @@ namespace alice_server
                             );
 
                         //now lets position the wrist as if the shoulder pitch and yaw are both 90 degrees
+                        //and take the handtip & thumb along for the ride.
+                        
                         rotatedPoint = RotatePoint(new Vector(transformedWrist.Z * -1, transformedWrist.Y), 90 - left_shoulder_pitch);
                         transformedWrist.Z = rotatedPoint.X * -1;
-                        transformedWrist.Y = rotatedPoint.Y;
+                        transformedWrist.Y = rotatedPoint.Y;                  
 
                         rotatedPoint = RotatePoint(new Vector(transformedWrist.X, transformedWrist.Z * -1), 90 - left_shoulder_yaw);
                         transformedWrist.X = rotatedPoint.X;
                         transformedWrist.Z = rotatedPoint.Y * -1;
-
+                        
                         //now we should be able to measure
                         var left_elbow_yaw = Get3DAngle(
                                 new Vector3D(1, 0, 0)
@@ -262,13 +267,15 @@ namespace alice_server
                             (int)left_elbow_yaw
                         );
 
-                        //get elbow pitch
-                        robotJoints[LEFT_ELBOW_PITCH].SetAngleFromKinectAngle(
-                            (int)
-                            Get3DAngle(left_shoulder.Position.ToVector3()
+                        var left_elbow_pitch = Get3DAngle(left_shoulder.Position.ToVector3()
                             , left_elbow.Position.ToVector3()
                             , left_wrist.Position.ToVector3()
-                            )
+                            );
+
+                        //get elbow pitch
+                        robotJoints[LEFT_ELBOW_PITCH].SetAngleFromKinectAngle(
+                            (int)left_elbow_pitch
+                            
                         );
 
                         //claws
@@ -362,8 +369,7 @@ namespace alice_server
                         }
 
 
-                        //Console.Write("\r" + hip_angle);
-                        Console.Write("\rlws: " + left_wheel_speed + "\t\trws: " + right_wheel_speed + "\t\t");
+                        
                     }
                 }
             }
@@ -431,7 +437,7 @@ namespace alice_server
         }
         // Create the serial port with basic settings
         //com 11 for Feather M4
-        static SerialPort port = new SerialPort("COM11",
+        static SerialPort port = new SerialPort("COM3",
           9600, Parity.None, 8, StopBits.One);
 
         static byte[] command_bytes = new byte[20];
@@ -450,9 +456,9 @@ namespace alice_server
             };
             robotJoints[RIGHT_SHOULDER_YAW] = new RobotJoint()
             {
-                MaxAngle = 135
+                MaxAngle = 180
                 ,
-                MinAngle = 45
+                MinAngle = 0
                 ,
                 InvertKinectAngle = true
                 ,
@@ -482,7 +488,7 @@ namespace alice_server
                 ,
                 MinAngle = 0
                 ,
-                InvertKinectAngle = false
+                InvertKinectAngle = true
                 ,
                 KinectAngleOffset = 0
                 ,
@@ -495,27 +501,27 @@ namespace alice_server
             {
                 MaxAngle = 180
                 ,
-                MinAngle = 30
+                MinAngle = 0
                 ,
                 InvertKinectAngle = true
                 ,
                 KinectAngleOffset = 0
                 ,
-                StartingAngle = 90
+                StartingAngle = 180
                 ,
-                Angle = 90
+                Angle = 180
             };
             robotJoints[LEFT_SHOULDER_YAW] = new RobotJoint()
             {
-                MaxAngle = 135
+                MaxAngle = 180
                 ,
-                MinAngle = 45
+                MinAngle = 0
                 ,
                 InvertKinectAngle = false
                 ,
                 KinectAngleOffset = 0
                 ,
-                StartingAngle = 90
+                StartingAngle = 90  
                 ,
                 Angle = 90
             };
@@ -539,7 +545,7 @@ namespace alice_server
                 ,
                 MinAngle = 0
                 ,
-                InvertKinectAngle = true
+                InvertKinectAngle = false
                 ,
                 KinectAngleOffset = 0
                 ,
@@ -596,18 +602,18 @@ namespace alice_server
 
 
             command_bytes[LEFT_CLAW] = 90;
-            command_bytes[LEFT_ELBOW_PITCH] = 90;
+            command_bytes[LEFT_ELBOW_PITCH] = 135;
             command_bytes[LEFT_ELBOW_YAW] = 90;
-            command_bytes[LEFT_SHOULDER_PITCH] = 90;
-            command_bytes[LEFT_SHOULDER_YAW] = 90;
+            command_bytes[LEFT_SHOULDER_PITCH] = 180;
+            command_bytes[LEFT_SHOULDER_YAW] =135;
             command_bytes[HEAD_PITCH] = 90;
             command_bytes[HEAD_YAW] = 90;
             command_bytes[RIGHT_WRIST] = 90;
             command_bytes[RIGHT_GRIPPER] = 0;
-            command_bytes[RIGHT_ELBOW_PITCH] = 90;
+            command_bytes[RIGHT_ELBOW_PITCH] = 55;
             command_bytes[RIGHT_ELBOW_YAW] = 90;
-            command_bytes[RIGHT_SHOULDER_PITCH] = 90;
-            command_bytes[RIGHT_SHOULDER_YAW] = 90;
+            command_bytes[RIGHT_SHOULDER_PITCH] = 0;
+            command_bytes[RIGHT_SHOULDER_YAW] = 45;
             command_bytes[RIGHT_WHEEL] = ConvertSignedIntToByte(0);
             command_bytes[LEFT_WHEEL] = ConvertSignedIntToByte(0);
             // Kinect sensor initialization
@@ -628,20 +634,20 @@ namespace alice_server
             while (true) {
                 try
                 {
-                    command_bytes[RIGHT_SHOULDER_PITCH] = (byte)robotJoints[RIGHT_SHOULDER_PITCH].Angle;
-                    command_bytes[RIGHT_SHOULDER_YAW] = (byte)robotJoints[RIGHT_SHOULDER_YAW].Angle;
-                    command_bytes[RIGHT_ELBOW_YAW] = (byte)robotJoints[RIGHT_ELBOW_YAW].Angle;
-                    command_bytes[RIGHT_ELBOW_PITCH] = (byte)robotJoints[RIGHT_ELBOW_PITCH].Angle;
+                    //command_bytes[RIGHT_SHOULDER_PITCH] = (byte)robotJoints[RIGHT_SHOULDER_PITCH].Angle;
+                    //command_bytes[RIGHT_SHOULDER_YAW] = (byte)robotJoints[RIGHT_SHOULDER_YAW].Angle;
+                    //command_bytes[RIGHT_ELBOW_YAW] = (byte)robotJoints[RIGHT_ELBOW_YAW].Angle;
+                    //command_bytes[RIGHT_ELBOW_PITCH] = (byte)robotJoints[RIGHT_ELBOW_PITCH].Angle;
 
-                    command_bytes[LEFT_SHOULDER_PITCH] = (byte)robotJoints[LEFT_SHOULDER_PITCH].Angle;
-                    command_bytes[LEFT_SHOULDER_YAW] = (byte)robotJoints[LEFT_SHOULDER_YAW].Angle;
-                    command_bytes[LEFT_ELBOW_YAW] = (byte)robotJoints[LEFT_ELBOW_YAW].Angle;
-                    command_bytes[LEFT_ELBOW_PITCH] = (byte)robotJoints[LEFT_ELBOW_PITCH].Angle;
-                    command_bytes[RIGHT_WRIST] = (byte)robotJoints[RIGHT_WRIST].Angle;
-                    command_bytes[LEFT_CLAW] = (byte)robotJoints[LEFT_CLAW].Angle;
+                    //command_bytes[LEFT_SHOULDER_PITCH] = (byte)robotJoints[LEFT_SHOULDER_PITCH].Angle;
+                    //command_bytes[LEFT_SHOULDER_YAW] = (byte)robotJoints[LEFT_SHOULDER_YAW].Angle;
+                    //command_bytes[LEFT_ELBOW_YAW] = (byte)robotJoints[LEFT_ELBOW_YAW].Angle;
+                    //command_bytes[LEFT_ELBOW_PITCH] = (byte)robotJoints[LEFT_ELBOW_PITCH].Angle;
+                    //command_bytes[RIGHT_WRIST] = (byte)robotJoints[RIGHT_WRIST].Angle;
+                    //command_bytes[LEFT_CLAW] = (byte)robotJoints[LEFT_CLAW].Angle;
                     command_bytes[RIGHT_WHEEL] = ConvertSignedIntToByte(right_wheel_speed);
                     command_bytes[LEFT_WHEEL] = ConvertSignedIntToByte(left_wheel_speed);
-                    command_bytes[RIGHT_GRIPPER] = (byte)robotJoints[RIGHT_GRIPPER].Angle;
+                    //command_bytes[RIGHT_GRIPPER] = (byte)robotJoints[RIGHT_GRIPPER].Angle;
                     //Console.Write(
                     //    "\rRSY:" + (int)command_bytes[RIGHT_SHOULDER_YAW]
                     //    + "\tRSP:" + (int)command_bytes[RIGHT_SHOULDER_PITCH]

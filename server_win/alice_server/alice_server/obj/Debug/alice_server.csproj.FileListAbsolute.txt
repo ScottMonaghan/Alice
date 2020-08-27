@@ -9,3 +9,15 @@ C:\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\LightBuzz.Vitruvi
 C:\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\Microsoft.Kinect.dll
 C:\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\LightBuzz.Vitruvius.xml
 C:\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\Microsoft.Kinect.xml
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\alice_server.exe.config
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\alice_server.exe
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\alice_server.pdb
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\LightBuzz.Vitruvius.dll
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\Microsoft.Kinect.dll
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\LightBuzz.Vitruvius.xml
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\bin\Debug\Microsoft.Kinect.xml
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\obj\Debug\alice_server.csprojAssemblyReference.cache
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\obj\Debug\alice_server.csproj.CoreCompileInputs.cache
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\obj\Debug\alice_server.csproj.CopyComplete
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\obj\Debug\alice_server.exe
+C:\Users\scott\Documents\GitHub\Alice\server_win\alice_server\alice_server\obj\Debug\alice_server.pdb
