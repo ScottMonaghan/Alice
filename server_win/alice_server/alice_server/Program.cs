@@ -54,7 +54,7 @@ namespace alice_server
             }
         }
         const int
-            LEFT_CLAW = 0
+            LEFT_GRIPPER = 0
             , LEFT_ELBOW_PITCH = 1
             , LEFT_ELBOW_YAW = 2
             , LEFT_SHOULDER_PITCH = 3
@@ -78,7 +78,7 @@ namespace alice_server
             ;
         const double
             MIN_LEAN = 0.3
-            , MAX_LEAN = 0.8
+            , MAX_LEAN = 0.6
             , MAX_TURN_DIFFERENTIAL = 1
             , Y_LEAN_OFFSET = 0.3;
 
@@ -90,6 +90,8 @@ namespace alice_server
         static RobotJoint[] robotJoints = new RobotJoint[16];
         static int left_wheel_speed;
         static int right_wheel_speed;
+        static double lean_x;
+        static double lean_y;
         static void Reader_MultiSourceFrameArrived(object sender, MultiSourceFrameArrivedEventArgs e)
         {
             var reference = e.FrameReference.AcquireFrame();
@@ -136,8 +138,8 @@ namespace alice_server
                     var right_hand_closed = (trackedBody.HandRightState == HandState.Closed);
                     var right_hand_open = (trackedBody.HandRightState == HandState.Open);
                     var left_hand_open = (trackedBody.HandLeftState == HandState.Open);
-                    var lean_x = trackedBody.Lean.X;
-                    var lean_y = trackedBody.Lean.Y + Y_LEAN_OFFSET;
+                    lean_x = trackedBody.Lean.X;
+                    lean_y = trackedBody.Lean.Y + Y_LEAN_OFFSET;
                     if (lean_y > 1) lean_y = 1;
                     if (spine_shoulder.Position.Z > 0)
                     {
@@ -290,11 +292,11 @@ namespace alice_server
 
                         if (left_hand_closed)
                         {
-                            robotJoints[LEFT_CLAW].Angle = 0;
+                            robotJoints[LEFT_GRIPPER].Angle = 180;
                         }
                         else if (left_hand_open)
                         {
-                            robotJoints[LEFT_CLAW].Angle = 180;
+                            robotJoints[LEFT_GRIPPER].Angle = 0;
                         }
 
                         //set wheel speed
@@ -313,30 +315,39 @@ namespace alice_server
                                 if (lean_y > 0) { lean_y = (float)MAX_LEAN; }
                                 else { lean_y = -1 * (float)MAX_LEAN; }
                             }
+                            if (Math.Abs(lean_x) > MAX_LEAN)
+                            {
+                                if (lean_x > 0) { lean_x = (float)MAX_LEAN; }
+                                else { lean_x = -1 * (float)MAX_LEAN; }
+                            }
                             base_speed = (int)((lean_y/MAX_LEAN) * MAX_SPEED);
                             left_wheel_speed = base_speed;
                             right_wheel_speed = base_speed;
                             //now do turn
-                            if (lean_x > MIN_LEAN)
-                            {
-                                //leaning right, so slow right wheel for right turn.
-                                right_wheel_speed = (int)((1 - ((-1 * lean_x) / MAX_LEAN) * MAX_TURN_DIFFERENTIAL) * right_wheel_speed);
-                            }
-                            else if (lean_x < (MIN_LEAN * -1))
-                            {
-                                //leaning left, so slow left wheel for left turn.
-                                left_wheel_speed = (int)((1 - (lean_x / MAX_LEAN) * MAX_TURN_DIFFERENTIAL) * left_wheel_speed);
-                            }
+                            //if (lean_x > 0)//MIN_LEAN)
+                            //{
+                            //    //leaning right, so slow right wheel for right turn.
+                            //    //right_wheel_speed = (int)((1 - ((-1 * lean_x) / MAX_LEAN) * MAX_TURN_DIFFERENTIAL) * right_wheel_speed);
+                            //    //leaning right so add speed to left wheel
+                            //    var speed_boost = 1 + (2*lean_x / MAX_LEAN);
+                            //    left_wheel_speed = (int)(left_wheel_speed * speed_boost);
+                            //}
+                            //else if (lean_x < 0)//(MIN_LEAN * -1))
+                            //{
+                            //    //leaning left, so slow left wheel for left turn.
+                            //    //left_wheel_speed = (int)((1 - (lean_x / MAX_LEAN) * MAX_TURN_DIFFERENTIAL) * left_wheel_speed);
+                            //    //leaning left so add speed to right wheel
+                            //    var speed_boost = 1 + ((-2*lean_x) / MAX_LEAN);
+                            //    right_wheel_speed = (int)(right_wheel_speed * speed_boost);
+                            //}
 
                         } else if (lean_x > MIN_LEAN)
                             {
-                                //leaning right, so slow right wheel for right turn.
                                 right_wheel_speed = 0;
                                 left_wheel_speed = (int)((lean_x / MAX_LEAN) * MAX_TURN_SPEED);
                             }
                          else if (lean_x < (MIN_LEAN * -1))
                             {
-                                //leaning left, so slow left wheel for left turn.
                                 left_wheel_speed = 0;
                                 right_wheel_speed = (int)(((-1*lean_x) / MAX_LEAN) * MAX_TURN_SPEED);
                          } else
@@ -581,7 +592,7 @@ namespace alice_server
                 ,
                 Angle = 0
             };
-            robotJoints[LEFT_CLAW] = new RobotJoint()
+            robotJoints[LEFT_GRIPPER] = new RobotJoint()
             {
                 MaxAngle = 180
                 ,
@@ -601,11 +612,11 @@ namespace alice_server
             }
 
 
-            command_bytes[LEFT_CLAW] = 90;
+            command_bytes[LEFT_GRIPPER] = 90;
             command_bytes[LEFT_ELBOW_PITCH] = 135;
             command_bytes[LEFT_ELBOW_YAW] = 90;
             command_bytes[LEFT_SHOULDER_PITCH] = 180;
-            command_bytes[LEFT_SHOULDER_YAW] =135;
+            command_bytes[LEFT_SHOULDER_YAW] =90;
             command_bytes[HEAD_PITCH] = 90;
             command_bytes[HEAD_YAW] = 90;
             command_bytes[RIGHT_WRIST] = 90;
@@ -613,7 +624,7 @@ namespace alice_server
             command_bytes[RIGHT_ELBOW_PITCH] = 55;
             command_bytes[RIGHT_ELBOW_YAW] = 90;
             command_bytes[RIGHT_SHOULDER_PITCH] = 0;
-            command_bytes[RIGHT_SHOULDER_YAW] = 45;
+            command_bytes[RIGHT_SHOULDER_YAW] = 90;
             command_bytes[RIGHT_WHEEL] = ConvertSignedIntToByte(0);
             command_bytes[LEFT_WHEEL] = ConvertSignedIntToByte(0);
             // Kinect sensor initialization
@@ -634,30 +645,33 @@ namespace alice_server
             while (true) {
                 try
                 {
-                    //command_bytes[RIGHT_SHOULDER_PITCH] = (byte)robotJoints[RIGHT_SHOULDER_PITCH].Angle;
-                    //command_bytes[RIGHT_SHOULDER_YAW] = (byte)robotJoints[RIGHT_SHOULDER_YAW].Angle;
-                    //command_bytes[RIGHT_ELBOW_YAW] = (byte)robotJoints[RIGHT_ELBOW_YAW].Angle;
-                    //command_bytes[RIGHT_ELBOW_PITCH] = (byte)robotJoints[RIGHT_ELBOW_PITCH].Angle;
+                    command_bytes[RIGHT_SHOULDER_PITCH] = (byte)robotJoints[RIGHT_SHOULDER_PITCH].Angle;
+                    command_bytes[RIGHT_SHOULDER_YAW] = (byte)robotJoints[RIGHT_SHOULDER_YAW].Angle;
+                    command_bytes[RIGHT_ELBOW_YAW] = (byte)robotJoints[RIGHT_ELBOW_YAW].Angle;
+                    command_bytes[RIGHT_ELBOW_PITCH] = (byte)robotJoints[RIGHT_ELBOW_PITCH].Angle;
 
-                    //command_bytes[LEFT_SHOULDER_PITCH] = (byte)robotJoints[LEFT_SHOULDER_PITCH].Angle;
-                    //command_bytes[LEFT_SHOULDER_YAW] = (byte)robotJoints[LEFT_SHOULDER_YAW].Angle;
-                    //command_bytes[LEFT_ELBOW_YAW] = (byte)robotJoints[LEFT_ELBOW_YAW].Angle;
-                    //command_bytes[LEFT_ELBOW_PITCH] = (byte)robotJoints[LEFT_ELBOW_PITCH].Angle;
-                    //command_bytes[RIGHT_WRIST] = (byte)robotJoints[RIGHT_WRIST].Angle;
-                    //command_bytes[LEFT_CLAW] = (byte)robotJoints[LEFT_CLAW].Angle;
+                    command_bytes[LEFT_SHOULDER_PITCH] = (byte)robotJoints[LEFT_SHOULDER_PITCH].Angle;
+                    command_bytes[LEFT_SHOULDER_YAW] = (byte)robotJoints[LEFT_SHOULDER_YAW].Angle;
+                    command_bytes[LEFT_ELBOW_YAW] = (byte)robotJoints[LEFT_ELBOW_YAW].Angle;
+                    command_bytes[LEFT_ELBOW_PITCH] = (byte)robotJoints[LEFT_ELBOW_PITCH].Angle;
+                    command_bytes[RIGHT_WRIST] = (byte)(180-robotJoints[RIGHT_SHOULDER_PITCH].Angle);//robotJoints[RIGHT_WRIST].Angle;
+                    command_bytes[LEFT_WRIST] = (byte)(180 - robotJoints[LEFT_SHOULDER_PITCH].Angle);//robotJoints[RIGHT_WRIST].Angle;
+                    command_bytes[LEFT_GRIPPER] = (byte)robotJoints[LEFT_GRIPPER].Angle;
                     command_bytes[RIGHT_WHEEL] = ConvertSignedIntToByte(right_wheel_speed);
                     command_bytes[LEFT_WHEEL] = ConvertSignedIntToByte(left_wheel_speed);
-                    //command_bytes[RIGHT_GRIPPER] = (byte)robotJoints[RIGHT_GRIPPER].Angle;
-                    //Console.Write(
-                    //    "\rRSY:" + (int)command_bytes[RIGHT_SHOULDER_YAW]
-                    //    + "\tRSP:" + (int)command_bytes[RIGHT_SHOULDER_PITCH]
+                    command_bytes[RIGHT_GRIPPER] = (byte)robotJoints[RIGHT_GRIPPER].Angle;
+                    Console.Write(
+                        "\rRWS:" + ((int)command_bytes[RIGHT_WHEEL] - 127)
+                        + "\tLSP:" + ((int)command_bytes[LEFT_WHEEL] -127)
+                        + "\tLX:" + String.Format("{0:0.000}%",lean_x)
+                        + "\tLY:" + String.Format("{0:0.000}%", lean_y)
                     //    + "\tREY:" + (int)command_bytes[RIGHT_ELBOW_YAW]
                     //    + "\tREP:" + (int)command_bytes[RIGHT_ELBOW_PITCH]
                     //    + "\tLSP:" + (int)command_bytes[LEFT_SHOULDER_PITCH]
                     //    + "\tLSY:" + (int)command_bytes[LEFT_SHOULDER_YAW]
                     //    + "\tLEY:" + (int)command_bytes[LEFT_ELBOW_YAW]
                     //    + "\tLEP:" + (int)command_bytes[LEFT_ELBOW_PITCH]
-                    //    + "\t");
+                        + "\t");
                     port.WriteLine("\\x" + BitConverter.ToString(command_bytes).Replace("-","\\x"));
                     //Thread.Sleep(250);
                 }

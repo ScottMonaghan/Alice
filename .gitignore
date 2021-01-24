@@ -24,3 +24,9 @@ $RECYCLE.BIN/
 server_win/alice_server/.vs/alice_server/v15/.suo
 server_win/alice_server/.vs/alice_server/v15/sqlite3/storage.ide
 server_win/alice_server/alice_server/bin/Debug/alice_server.pdb
+server_win/alice_server/.vs/alice_server/v16/.suo
+server_win/alice_server/alice_server/bin/Debug/alice_server.exe
+server_win/alice_server/alice_server/bin/Debug/alice_server.pdb
+server_win/alice_server/alice_server/obj/Debug/alice_server.csprojAssemblyReference.cache
+server_win/alice_server/alice_server/obj/Debug/alice_server.exe
+server_win/alice_server/alice_server/obj/Debug/alice_server.pdb
