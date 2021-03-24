@@ -151,29 +151,53 @@ while True:
         tracked_left_shoulder_roll = EulerOrientation.inverse180(
                 int(EulerOrientation.add_angles(90, left_shoulder_raw_euler.roll))
             )
-        #if tracked_head_yaw > 180: tracked_head_yaw = 180
+
         tracked_head_yaw = EulerOrientation.get_180_servo_angle(tracked_head_yaw)
         tracked_head_pitch = EulerOrientation.get_180_servo_angle(tracked_head_pitch)
         tracked_left_shoulder_yaw = EulerOrientation.get_180_servo_angle(tracked_left_shoulder_yaw)
-        tracked_left_shoulder_pitch = EulerOrientation.get_180_servo_angle(tracked_left_shoulder_pitch)
-        tracked_left_shoulder_roll = EulerOrientation.get_180_servo_angle(tracked_left_shoulder_roll)
+        LEFT_SHOULDER_PITCH_MIN = 35
+        LEFT_SHOULDER_PITCH_MAX = 165
+        tracked_left_shoulder_pitch = int(EulerOrientation.get_180_servo_angle(
+            (
+                (tracked_left_shoulder_pitch-LEFT_SHOULDER_PITCH_MIN)
+                / (LEFT_SHOULDER_PITCH_MAX-LEFT_SHOULDER_PITCH_MIN)
+                ) * 180
+            )
+        )
+        LEFT_SHOULDER_ROLL_MIN = 40
+        LEFT_SHOULDER_ROLL_MAX = 100
+        tracked_left_shoulder_roll = int(EulerOrientation.get_180_servo_angle(
+            (
+                (tracked_left_shoulder_roll-LEFT_SHOULDER_ROLL_MIN)
+                / (LEFT_SHOULDER_ROLL_MAX-LEFT_SHOULDER_ROLL_MIN)
+                ) * 90
+            )
+        ) + 90
+        if tracked_left_shoulder_roll >180:tracked_left_shoulder_roll=180
+
+        tracked_left_wrist_yaw = int(left_wrist_euler.yaw)
+        if tracked_left_wrist_yaw < 90:
+            if tracked_left_wrist_yaw > 45 : tracked_left_wrist_yaw = 90
+            else: tracked_left_wrist_yaw = 180
 
 
-        command_bytes[HEAD_YAW] = tracked_head_yaw
-        command_bytes[HEAD_PITCH] = tracked_head_pitch
+        #command_bytes[HEAD_YAW] = tracked_head_yaw
+        #command_bytes[HEAD_PITCH] = tracked_head_pitch
         command_bytes[LEFT_SHOULDER_YAW] = tracked_left_shoulder_yaw
         command_bytes[LEFT_SHOULDER_PITCH] = tracked_left_shoulder_pitch
         command_bytes[LEFT_ELBOW_YAW] = tracked_left_shoulder_roll
 
         command_bytes[LEFT_ELBOW_PITCH] = int(left_wrist_euler.yaw)
-        command_bytes[LEFT_WRIST] = int(left_wrist_euler.roll)
+        #command_bytes[LEFT_WRIST] = int(left_wrist_euler.roll)
 
         signed_command = bytearray(PACKET_SIGNATURE) + bytearray(command_bytes)
         packet = rfm9x.send(signed_command)
         print(
-            "pitch: "
-            + str(int(left_wrist_euler.yaw))
-            + "\t\troll: " + str(int(left_wrist_euler.roll))
+            "elbow pitch: " + str(tracked_left_wrist_yaw)
+            # "pitch: "
+#             + str(int(tracked_left_shoulder_pitch))
+#             + "\t\tyaw: " + str(int(tracked_left_shoulder_yaw))
+#             + "\t\troll: " + str(int(tracked_left_shoulder_roll))
             )
         #time.sleep(0.1)
     except Exception as e:
