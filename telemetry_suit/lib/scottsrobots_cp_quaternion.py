@@ -1,25 +1,8 @@
 import math
-import sys
 
 class EulerOrientation:
     def __init__(self, roll=0,pitch=0,yaw=0):
         self.roll, self.pitch, self.yaw = roll,pitch,yaw
-    @staticmethod
-    def add_angles(angle1, angle2):
-        result = angle1 + angle2
-        if result > 360: result -= 360
-        if result < 0: result += 360
-        return result
-    @staticmethod
-    def get_180_servo_angle(angle):
-        if angle >= 270: return 0
-        elif angle > 180: return 180
-        elif angle < 0: return 0
-        else: return angle
-    @staticmethod
-    def inverse180(angle):
-        return 180 - angle
-
 
 class Quaternion:
     #static helper methods
