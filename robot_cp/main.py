@@ -21,18 +21,16 @@ def log_error(exc):
 
 #constants
 RADIO_TIMEOUT = 0.5
-MIN_ANGLE_CHANGE = 2
-SMOOTHING_RATIO = 0.25
+MIN_ANGLE_CHANGE = 5
 SMOOTHING_ANGLE = 3
 MAX_SPEED = 1
 DELAY_THROTTLE = 1
-TURN_SPEED = 0.6
+TURN_SPEED = 1
 MIN_SPEED = 0.35
 RIGHT_WHEEL_MULTIPLIER = 1 #0.95
 LEFT_WHEEL_MULTIPLIER = 1
 MAX_WHEEL_DELAY = 0.8
 SERVO_INIT_DELAY = 0.25
-DISABLE_WHEELS = True
 
 #gripper_constants
 GRIPPER_TIGHTNESS = 60
@@ -177,22 +175,16 @@ def get_voltage(pin):
 
 #functions
 
-def move_servo(index,command_bytes,index_offset = 0, smoothing=False, delay=False, lowspeed=False):
+def move_servo(index,command_bytes,index_offset = 0, smoothing=False, delay=False):
     servo = servokit.servo[index]
     new_angle = command_bytes[index + index_offset]
     if abs(servo.angle - new_angle) > MIN_ANGLE_CHANGE:
         try:
             if (smoothing):
-                if lowspeed:
-                    if new_angle > servo.angle:
-                        servo.angle += SMOOTHING_ANGLE
-                    elif servo.angle - SMOOTHING_ANGLE > 0:
-                        servo.angle -= SMOOTHING_ANGLE
-                else:
-                    if new_angle > servo.angle:
-                        servo.angle += SMOOTHING_RATIO * (new_angle - servo.angle) #+=SMOOTHING_ANGLE
-                    elif servo.angle - SMOOTHING_ANGLE > 0:
-                        servo.angle -= SMOOTHING_RATIO * (servo.angle-new_angle)#SMOOTHING_ANGLE
+                if new_angle > servo.angle:
+                    servo.angle+=SMOOTHING_ANGLE
+                elif servo.angle - SMOOTHING_ANGLE > 0:
+                    servo.angle-=SMOOTHING_ANGLE
             else:
                 servo.angle = new_angle
 
@@ -243,67 +235,67 @@ def closestAngleToTarget(currentAngle,targetAngle):
             return absInverseAngle
 
 
-def set_orientation(command_bytes, smoothing = False, delay = False, correctHeading = False, lowspeed=False):
+def set_orientation(command_bytes, smoothing = False, delay = False, correctHeading = False):
     #move arms and head
-    move_servo(HEAD_PITCH, command_bytes, INDEX_OFFSET, smoothing,delay,lowspeed)
-    move_servo(HEAD_YAW, command_bytes, INDEX_OFFSET, smoothing,delay,lowspeed)
-    move_servo(LEFT_ELBOW_PITCH, command_bytes, INDEX_OFFSET, smoothing,delay,lowspeed)
-    move_servo(LEFT_ELBOW_YAW, command_bytes, INDEX_OFFSET, smoothing,delay,lowspeed)
-    move_servo(LEFT_SHOULDER_PITCH, command_bytes, INDEX_OFFSET, smoothing,delay,lowspeed)
-    move_servo(LEFT_SHOULDER_YAW, command_bytes, INDEX_OFFSET, smoothing,delay,lowspeed)
-    move_servo(LEFT_WRIST, command_bytes, INDEX_OFFSET, smoothing,delay,lowspeed)
-    move_servo(RIGHT_ELBOW_PITCH, command_bytes, INDEX_OFFSET, smoothing,delay,lowspeed)
-    move_servo(RIGHT_ELBOW_YAW, command_bytes, INDEX_OFFSET, smoothing,delay,lowspeed)
-    move_servo(RIGHT_SHOULDER_PITCH, command_bytes, INDEX_OFFSET, smoothing,delay,lowspeed)
-    move_servo(RIGHT_SHOULDER_YAW, command_bytes, INDEX_OFFSET,smoothing,delay,lowspeed)
-    move_servo(RIGHT_WRIST, command_bytes, INDEX_OFFSET,smoothing,delay,lowspeed)
+    move_servo(HEAD_PITCH, command_bytes, INDEX_OFFSET, smoothing,delay)
+    move_servo(HEAD_YAW, command_bytes, INDEX_OFFSET, smoothing,delay)
+    move_servo(LEFT_ELBOW_PITCH, command_bytes, INDEX_OFFSET, smoothing,delay)
+    move_servo(LEFT_ELBOW_YAW, command_bytes, INDEX_OFFSET, smoothing,delay)
+    move_servo(LEFT_SHOULDER_PITCH, command_bytes, INDEX_OFFSET, smoothing,delay)
+    move_servo(LEFT_SHOULDER_YAW, command_bytes, INDEX_OFFSET, smoothing,delay)
+    move_servo(LEFT_WRIST, command_bytes, INDEX_OFFSET, smoothing,delay)
+    move_servo(RIGHT_ELBOW_PITCH, command_bytes, INDEX_OFFSET, smoothing,delay)
+    move_servo(RIGHT_ELBOW_YAW, command_bytes, INDEX_OFFSET, smoothing,delay)
+    move_servo(RIGHT_SHOULDER_PITCH, command_bytes, INDEX_OFFSET, smoothing,delay)
+    move_servo(RIGHT_SHOULDER_YAW, command_bytes, INDEX_OFFSET,smoothing,delay)
+    move_servo(RIGHT_WRIST, command_bytes, INDEX_OFFSET,smoothing,delay)
 
-    if not DISABLE_WHEELS:
-        #correct heading
-        qx, qy, qz, qw = bno.quaternion  # pylint:disable=no-member
-        eulerOrientation = quaternionToEuler(qw=qw,qx=qx,qy=qy,qz=qz)
-        #test angle check
-        targetRotation = struct.unpack_from('>H',command_bytes, HEADING_START + INDEX_OFFSET)[0] / HEADING_MULTIPLIER
-        precisionTolerance = 3
-        currentRotation = eulerOrientation.yaw
-        angleToTarget = closestAngleToTarget(currentRotation, targetRotation)
-        if correctHeading:
-            if math.fabs(angleToTarget) > 45:
-                rotationWheelSpeed = TURN_SPEED
-            else:
-                rotationWheelSpeed = (math.fabs(angleToTarget)/45 * (TURN_SPEED-MIN_SPEED)) + MIN_SPEED
-            if angleToTarget >= 0 + precisionTolerance:
-                #print("Turn Left\t\tCurrent Rotation:" + str(int(currentRotation)))
-                left_wheel.motor.throttle = (
-                    left_wheel.convert_byte_to_throttle(command_bytes[LEFT_WHEEL + INDEX_OFFSET]) + ( -1 * rotationWheelSpeed)
-                    if left_wheel.convert_byte_to_throttle(command_bytes[LEFT_WHEEL + INDEX_OFFSET]) + ( -1 * rotationWheelSpeed) >= -1 * MAX_SPEED
-                    else -1 * MIN_SPEED
-                )
-                right_wheel.motor.throttle = (
-                    right_wheel.convert_byte_to_throttle(command_bytes[RIGHT_WHEEL + INDEX_OFFSET]) + rotationWheelSpeed
-                    if right_wheel.convert_byte_to_throttle(command_bytes[RIGHT_WHEEL + INDEX_OFFSET]) + rotationWheelSpeed <= MAX_SPEED
-                    else MAX_SPEED
-                )
-            elif angleToTarget <= 0 - precisionTolerance:
-                #print("Turn Right\t\tCurrent Rotation:" + str(int(currentRotation)))
-                right_wheel.motor.throttle = (
-                    right_wheel.convert_byte_to_throttle(command_bytes[RIGHT_WHEEL + INDEX_OFFSET]) + ( -1 * rotationWheelSpeed)
-                    if right_wheel.convert_byte_to_throttle(command_bytes[RIGHT_WHEEL + INDEX_OFFSET]) + ( -1 * rotationWheelSpeed) >= -1 * MAX_SPEED
-                    else -1 * MIN_SPEED
-                )
-                left_wheel.motor.throttle = (
-                    left_wheel.convert_byte_to_throttle(command_bytes[LEFT_WHEEL + INDEX_OFFSET]) + rotationWheelSpeed
-                    if left_wheel.convert_byte_to_throttle(command_bytes[LEFT_WHEEL + INDEX_OFFSET]) + rotationWheelSpeed <= MAX_SPEED
-                    else MAX_SPEED
-                )
-            else:
-                #print("Target Reached!\t\tCurrent Rotation:" + str(int(currentRotation)))
-                left_wheel.set_wheel_speed(command_bytes[LEFT_WHEEL+ INDEX_OFFSET])
-                right_wheel.set_wheel_speed(command_bytes[RIGHT_WHEEL + INDEX_OFFSET])
+
+    #correct heading
+    qx, qy, qz, qw = bno.quaternion  # pylint:disable=no-member
+    eulerOrientation = quaternionToEuler(qw=qw,qx=qx,qy=qy,qz=qz)
+    #test angle check
+    targetRotation = struct.unpack_from('>H',command_bytes, HEADING_START + INDEX_OFFSET)[0] / HEADING_MULTIPLIER
+    precisionTolerance = 3
+    currentRotation = eulerOrientation.yaw
+    angleToTarget = closestAngleToTarget(currentRotation, targetRotation)
+    if correctHeading:
+        if math.fabs(angleToTarget) > 45:
+            rotationWheelSpeed = TURN_SPEED
         else:
+            rotationWheelSpeed = (math.fabs(angleToTarget)/45 * (TURN_SPEED-MIN_SPEED)) + MIN_SPEED
+        if angleToTarget >= 0 + precisionTolerance:
+            #print("Turn Left\t\tCurrent Rotation:" + str(int(currentRotation)))
+            left_wheel.motor.throttle = (
+                left_wheel.convert_byte_to_throttle(command_bytes[LEFT_WHEEL + INDEX_OFFSET]) + ( -1 * rotationWheelSpeed)
+                if left_wheel.convert_byte_to_throttle(command_bytes[LEFT_WHEEL + INDEX_OFFSET]) + ( -1 * rotationWheelSpeed) >= -1 * MAX_SPEED
+                else -1 * MIN_SPEED
+            )
+            right_wheel.motor.throttle = (
+                right_wheel.convert_byte_to_throttle(command_bytes[RIGHT_WHEEL + INDEX_OFFSET]) + rotationWheelSpeed
+                if right_wheel.convert_byte_to_throttle(command_bytes[RIGHT_WHEEL + INDEX_OFFSET]) + rotationWheelSpeed <= MAX_SPEED
+                else MAX_SPEED
+            )
+        elif angleToTarget <= 0 - precisionTolerance:
+            #print("Turn Right\t\tCurrent Rotation:" + str(int(currentRotation)))
+            right_wheel.motor.throttle = (
+                right_wheel.convert_byte_to_throttle(command_bytes[RIGHT_WHEEL + INDEX_OFFSET]) + ( -1 * rotationWheelSpeed)
+                if right_wheel.convert_byte_to_throttle(command_bytes[RIGHT_WHEEL + INDEX_OFFSET]) + ( -1 * rotationWheelSpeed) >= -1 * MAX_SPEED
+                else -1 * MIN_SPEED
+            )
+            left_wheel.motor.throttle = (
+                left_wheel.convert_byte_to_throttle(command_bytes[LEFT_WHEEL + INDEX_OFFSET]) + rotationWheelSpeed
+                if left_wheel.convert_byte_to_throttle(command_bytes[LEFT_WHEEL + INDEX_OFFSET]) + rotationWheelSpeed <= MAX_SPEED
+                else MAX_SPEED
+            )
+        else:
+            #print("Target Reached!\t\tCurrent Rotation:" + str(int(currentRotation)))
             left_wheel.set_wheel_speed(command_bytes[LEFT_WHEEL+ INDEX_OFFSET])
             right_wheel.set_wheel_speed(command_bytes[RIGHT_WHEEL + INDEX_OFFSET])
-        #set wheel speed
+    else:
+        left_wheel.set_wheel_speed(command_bytes[LEFT_WHEEL+ INDEX_OFFSET])
+        right_wheel.set_wheel_speed(command_bytes[RIGHT_WHEEL + INDEX_OFFSET])
+    #set wheel speed
 
 
 
@@ -549,10 +541,10 @@ frame_blink = [
 command_bytes = [90] * 64
 command_bytes[LEFT_GRIPPER_SERVO] = GRIPPER_CLOSE_ANGLE
 command_bytes[RIGHT_GRIPPER_SERVO] = GRIPPER_OPEN_ANGLE
-command_bytes[LEFT_ELBOW_PITCH] = 180
+command_bytes[LEFT_ELBOW_PITCH] = 90
 command_bytes[LEFT_ELBOW_YAW] = 90
-command_bytes[LEFT_SHOULDER_PITCH] = 60
-command_bytes[LEFT_SHOULDER_YAW] = 90
+command_bytes[LEFT_SHOULDER_PITCH] = 180
+command_bytes[LEFT_SHOULDER_YAW] = 135
 command_bytes[HEAD_PITCH] =65
 command_bytes[HEAD_YAW] = 90
 command_bytes[RIGHT_WRIST] = 90
@@ -619,9 +611,8 @@ demo=True
 correctHeading = False
 while True:
     loopStart = monotonic()
-    lowspeed = False
+
     if monotonic() - radio_timer > RADIO_TIMEOUT and demo:
-        lowspeed = True
         correctHeading = False
         left_wheel.motor.throttle = 0
         right_wheel.motor.throttle = 0
@@ -662,7 +653,7 @@ while True:
         log_error(e)
 
     try:
-        set_orientation(command_bytes=command_bytes,smoothing=True, correctHeading=correctHeading, lowspeed=lowspeed)
+        set_orientation(command_bytes=command_bytes,smoothing=True, correctHeading=correctHeading)
     except Exception as e:
         log_error(e)
     setEyeFrameByDirection(getEyeDirectionByOrientation())
