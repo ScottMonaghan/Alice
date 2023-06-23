@@ -28,7 +28,7 @@ class Joint():
         #for this we need to multiply the offset_orientation by all ancestors
         current_joint = self
         return_orientation = Quaternion.from_quaternion(self.offset_orientation)
-        while current_joint.parent is not None:
+        while current_joint.parent != None:
             current_joint = current_joint.parent
             return_orientation = Quaternion.multiply(
                     return_orientation, Quaternion.conjugate(current_joint.servo_orientation)
@@ -56,7 +56,7 @@ class TrackedBody():
         self.joint_chest = Joint()
         self.joint_head = self.joint_chest.add_new_child()
         self.joint_left_shoulder = self.joint_chest.add_new_child()
-        #self.joint_left_forearm = self.joint_left_shoulder.add_new_child()
+        self.joint_left_forearm = self.joint_left_shoulder.add_new_child()
         self.joint_left_wrist = self.joint_left_shoulder.add_new_child()
         self.joint_root = self.joint_chest
 

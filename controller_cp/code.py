@@ -76,7 +76,6 @@ bno_chest = None
 try:
     bno_chest = BNO08X_I2C(tca[0])
     bno_chest.enable_feature(BNO_REPORT_GAME_ROTATION_VECTOR)
-
 except Exception as e:
     try:raise ValueError("Chest bno085 not connected")from e
     except ValueError as custom_exc: log_error(custom_exc)
@@ -186,7 +185,6 @@ while True:
         #first figure out left shoulder yaw servo value
         #get basic value
         joint_left_shoulder_euler = Quaternion.to_euler(tracked_body.joint_left_shoulder.servo_orientation)
-        joint_left_shoulder_raw_euler = Quaternion.to_euler(tracked_body.joint_left_shoulder.raw_orientation)
         left_shoulder_yaw_servo_value = joint_left_shoulder_euler.yaw
         #neutral position starts at 0 but we want it to start at 90
         left_shoulder_yaw_servo_value = EulerOrientation.add_angles(90,left_shoulder_yaw_servo_value)
@@ -199,7 +197,7 @@ while True:
         left_shoulder_yaw_servo_value = int(left_shoulder_yaw_servo_value)
 
         #now figure out the left shoulder pitch servo value
-        left_shoulder_pitch_servo_value = joint_left_shoulder_raw_euler.pitch
+        left_shoulder_pitch_servo_value = joint_left_shoulder_euler.pitch
         #neutral position starts at 0 but we want it to start at 90
         left_shoulder_pitch_servo_value = EulerOrientation.add_angles(90,left_shoulder_pitch_servo_value)
         #in the case of pitch, the servo full-range is 0-180
@@ -223,7 +221,7 @@ while True:
         left_shoulder_pitch_servo_value = int(left_shoulder_pitch_servo_value)
 
         #now figure out the left elbow yaw servo value (left shoulder sensor roll)
-        left_elbow_yaw_servo_value = joint_left_shoulder_raw_euler.roll
+        left_elbow_yaw_servo_value = joint_left_shoulder_euler.roll
         #for the left elbo yaw servo we want the angle to increase clockwise (opposite of sensor)
         left_elbow_yaw_servo_value = 180 - left_elbow_yaw_servo_value
         #in the case of elbow_yaw, the servo full-range is 45-180
@@ -238,10 +236,10 @@ while True:
         elif left_elbow_yaw_servo_value < MIN_SHOULDER_ROLL_SENSOR_VALUE:
             left_elbow_yaw_servo_value = MIN_SHOULDER_ROLL_SENSOR_VALUE
 
-#         left_elbow_yaw_servo_value = (
-#             (left_elbow_yaw_servo_value-MIN_SHOULDER_ROLL_SENSOR_VALUE)
-#             /(MAX_SHOULDER_ROLL_SENSOR_VALUE-MIN_SHOULDER_ROLL_SENSOR_VALUE)
-#             )*(180-45) + 45
+        left_elbow_yaw_servo_value = (
+            (left_elbow_yaw_servo_value-MIN_SHOULDER_ROLL_SENSOR_VALUE)
+            /(MAX_SHOULDER_ROLL_SENSOR_VALUE-MIN_SHOULDER_ROLL_SENSOR_VALUE)
+            )*(180-45) + 45
         #finally we need trim to an integer
         left_elbow_yaw_servo_value = int(left_elbow_yaw_servo_value)
 
@@ -304,12 +302,7 @@ while True:
         signed_command = bytearray(PACKET_SIGNATURE) + bytearray(command_bytes)
         packet = rfm9x.send(signed_command)
         print(
-                int(chest_euler.yaw),
-                "\t\t",
-                left_shoulder_yaw_servo_value,
-                "\t\t",
-                left_shoulder_pitch_servo_value,
-                "\t\t", left_elbow_yaw_servo_value
+            speed_command_byte
             )
         time.sleep(0.01)
     except Exception as e:
