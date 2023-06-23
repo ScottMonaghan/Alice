@@ -19,9 +19,7 @@ class EulerOrientation:
     @staticmethod
     def inverse180(angle):
         return 180 - angle
-    @staticmethod
-    def inverse360(angle):
-        return 360 - angle
+
 
 class Quaternion:
     #static helper methods

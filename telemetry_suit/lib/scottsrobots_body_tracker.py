@@ -53,9 +53,7 @@ class TrackedBody():
         self.joint_chest = Joint()
         self.joint_head = self.joint_chest.add_new_child()
         self.joint_left_shoulder = self.joint_chest.add_new_child()
-        self.joint_left_wrist = self.joint_left_shoulder.add_new_child()
         self.joint_root = self.joint_chest
-
     def initialize_orientations(self):
         self.joint_root.update_orientation(update_offset_multiplier = True)
     def update_orientations(self):

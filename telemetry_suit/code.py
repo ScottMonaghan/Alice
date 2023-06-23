@@ -65,12 +65,10 @@ tca = TCA9548A(i2c)
 #left arm i2c bus plugged into tca channel 0
 bno_chest = BNO08X_I2C(tca[0])
 bno_chest.enable_feature(BNO_REPORT_GAME_ROTATION_VECTOR)
-bno_head = BNO08X_I2C(tca[7], address=0x4B)
+bno_head = BNO08X_I2C(i2c, address=0x4B)
 bno_head.enable_feature(BNO_REPORT_GAME_ROTATION_VECTOR)
 bno_left_shoulder = BNO08X_I2C(tca[1])
 bno_left_shoulder.enable_feature(BNO_REPORT_GAME_ROTATION_VECTOR)
-bno_left_wrist = BNO08X_I2C(tca[1], address=0x4B)
-bno_left_wrist.enable_feature(BNO_REPORT_GAME_ROTATION_VECTOR)
 #initialize rfm95
 spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 cs = digitalio.DigitalInOut(board.A5)
@@ -104,7 +102,6 @@ tracked_body = TrackedBody()
 tracked_body.joint_chest.bno085 = bno_chest
 tracked_body.joint_head.bno085 = bno_head
 tracked_body.joint_left_shoulder.bno085 = bno_left_shoulder
-tracked_body.joint_left_wrist.bno085 = bno_left_wrist
 #wait five seconds to initialize
 print("initializing body tracker in 5 seconds...")
 time.sleep(5)
@@ -135,10 +132,6 @@ while True:
         head_pitch_euler = Quaternion.to_euler(tracked_body.joint_head.raw_orientation)
         left_shoulder_raw_euler =  Quaternion.to_euler(tracked_body.joint_left_shoulder.offset_orientation)
         left_shoulder_yaw_euler =  Quaternion.to_euler(tracked_body.joint_left_shoulder.servo_orientation)
-        left_wrist_euler = Quaternion.to_euler(tracked_body.joint_left_wrist.servo_orientation)
-        #inverse left wrist yaw
-        left_wrist_euler.yaw = EulerOrientation.inverse180(EulerOrientation.get_180_servo_angle(EulerOrientation.inverse360(left_wrist_euler.yaw)))
-        left_wrist_euler.roll = EulerOrientation.inverse180(EulerOrientation.get_180_servo_angle(EulerOrientation.add_angles(90, left_wrist_euler.roll)))
         #the neutral head pitch and yaw on ALICE's head is both 90, but it's 0 for the joints,
         #so we need to add 90 degrees to each of these angles
 
@@ -151,6 +144,7 @@ while True:
         tracked_left_shoulder_roll = EulerOrientation.inverse180(
                 int(EulerOrientation.add_angles(90, left_shoulder_raw_euler.roll))
             )
+
         #if tracked_head_yaw > 180: tracked_head_yaw = 180
         tracked_head_yaw = EulerOrientation.get_180_servo_angle(tracked_head_yaw)
         tracked_head_pitch = EulerOrientation.get_180_servo_angle(tracked_head_pitch)
@@ -165,15 +159,13 @@ while True:
         command_bytes[LEFT_SHOULDER_PITCH] = tracked_left_shoulder_pitch
         command_bytes[LEFT_ELBOW_YAW] = tracked_left_shoulder_roll
 
-        command_bytes[LEFT_ELBOW_PITCH] = int(left_wrist_euler.yaw)
-        command_bytes[LEFT_WRIST] = int(left_wrist_euler.roll)
-
         signed_command = bytearray(PACKET_SIGNATURE) + bytearray(command_bytes)
         packet = rfm9x.send(signed_command)
         print(
             "pitch: "
-            + str(int(left_wrist_euler.yaw))
-            + "\t\troll: " + str(int(left_wrist_euler.roll))
+            + str(tracked_left_shoulder_pitch)
+            + "\t\tyaw: " + str(tracked_left_shoulder_yaw)
+            + "\t\troll: " + str(tracked_left_shoulder_roll)
             )
         #time.sleep(0.1)
     except Exception as e:
