@@ -37,8 +37,8 @@ INDEX_OFFSET = len(PACKET_SIGNATURE)
 
 #init RF95
 spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
-cs = digitalio.DigitalInOut(board.A0)
-reset = digitalio.DigitalInOut(board.A1)
+cs = digitalio.DigitalInOut(board.D6) #DigitalInOut(board.A0)
+reset = digitalio.DigitalInOut(board.D9) #.DigitalInOut(board.A1)
 import adafruit_rfm9x
 rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, 915.0)
 
@@ -65,7 +65,7 @@ def getDistanceFromStartingPostion(position, startingPosition):
     
     #e.g. startingPosition = 325, position = 5, distance transforms from -320 to 40
     if (distance < -180):
-        distance = (360 - startingPostion) + position
+        distance = (360 - startingPosition) + position
     
     return distance
     
@@ -127,6 +127,7 @@ while True:
         command_bytes[HEAD_PITCH] = convertedHeadAngles[1]
         signed_command = bytearray(PACKET_SIGNATURE) + bytearray(command_bytes)
         packet = rfm9x.send(signed_command)
+        print('Yaw: ' + str(command_bytes[HEAD_YAW]) + '\t\t\tPitch: ' + str(command_bytes[HEAD_PITCH]))
    #  print(
 #         int(command_bytes[LEFT_WHEEL])
 #         )
