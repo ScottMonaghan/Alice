@@ -17,15 +17,16 @@ from adafruit_ht16k33.matrix import Matrix8x8
 MIN_ANGLE_CHANGE = 5
 SMOOTHING_ANGLE = 3
 MAX_SPEED = 1
-DELAY_THROTTLE = 1
-MIN_SPEED = 0.8
-MAX_WHEEL_DELAY = 0.3
+DELAY_THROTTLE = 0.8
+MIN_SPEED = 0.4
+MAX_WHEEL_DELAY = 0.2
 
 #gripper_constants
 GRIPPER_TIGHTNESS = 30
 GRIPPER_TOLERANCE = 5
 GRIPPER_MOTION = 10
 LEFT_GRIPPER_SERVO = 0
+RIGHT_GRIPPER_SERVO = 10
 GRIPPER_OPEN_ANGLE = 90
 GRIPPER_CLOSE_ANGLE = 180
 GRIPPER_CLOSE_EASE = 0.40
@@ -107,7 +108,10 @@ class Wheel:
             self.delaySeconds = monotonic() - self.delayStartTime
             if self.delaySeconds >= delay:
                #we're past the delay, send a pulse at MIN_SPEED and start the delay clock again
-                self.motor.throttle = DELAY_THROTTLE
+                if speed > 0:
+                    self.motor.throttle = DELAY_THROTTLE
+                else:
+                    self.motor.throttle = DELAY_THROTTLE * -1
                 self.delayStartTime = monotonic()
             else:
                 self.motor.throttle = 0
@@ -138,8 +142,8 @@ bin1 = pulseio.PWMOut(board.D11)
 
 wheels_sleep.direction = Direction.OUTPUT
 wheels_sleep.value = True
-left_wheel_motor = motor.DCMotor(ain1,ain2)
-right_wheel_motor = motor.DCMotor(bin1,bin2)
+left_wheel_motor = motor.DCMotor(bin2,bin1)
+right_wheel_motor = motor.DCMotor(ain2,ain1)
 left_wheel_motor.throttle = 0
 right_wheel_motor.throttle = 0
 left_wheel = Wheel(left_wheel_motor)
@@ -159,12 +163,12 @@ def move_servo(index,command_bytes,index_offset = 0, smoothing=False):
    if abs(servo.angle - new_angle) > MIN_ANGLE_CHANGE:
         try:
             if (smoothing):
-                if new_angle > servo.angle:
-                    servo.angle+=SMOOTHING_ANGLE
-                elif servo.angle - SMOOTHING_ANGLE > 0:
-                    servo.angle-=SMOOTHING_ANGLE
+                # if new_angle > servo.angle:
+                #     servo.angle+=SMOOTHING_ANGLE
+                # elif servo.angle - SMOOTHING_ANGLE > 0:
+                #     servo.angle-=SMOOTHING_ANGLE
 
-
+                servo.angle += (new_angle - servo.angle) * 0.1
 #                 smooth_angle = (new_angle - servo.angle) * 0.5
 #                 if (smooth_angle > SMOOTHING_ANGLE):
 #                     smooth_angle = SMOOTHING_ANGLE
@@ -174,7 +178,7 @@ def move_servo(index,command_bytes,index_offset = 0, smoothing=False):
             else:
                 servo.angle = new_angle
 
-        except Error as e: print(e)
+        except Exception as e: print(e)
 
 def set_orientation(command_bytes, smoothing = False):
     #move arms and head
@@ -186,13 +190,14 @@ def set_orientation(command_bytes, smoothing = False):
     move_servo(LEFT_WRIST, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(HEAD_PITCH, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(HEAD_YAW, command_bytes, INDEX_OFFSET, smoothing)
-#     move_servo(RIGHT_WRIST, command_bytes, INDEX_OFFSET, smoothing)
+    move_servo(RIGHT_WRIST, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(RIGHT_ELBOW_PITCH, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(RIGHT_ELBOW_YAW, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(RIGHT_SHOULDER_PITCH, command_bytes, INDEX_OFFSET, smoothing)
     move_servo(RIGHT_SHOULDER_YAW, command_bytes, INDEX_OFFSET,smoothing)
     move_servo(RIGHT_WRIST, command_bytes, INDEX_OFFSET,smoothing)
     move_servo(LEFT_GRIPPER_SERVO, command_bytes, INDEX_OFFSET,smoothing)
+    move_servo(RIGHT_GRIPPER_SERVO, command_bytes, INDEX_OFFSET,smoothing)
 
     #set wheel speed
     left_wheel.set_wheel_speed(command_bytes[LEFT_WHEEL+ INDEX_OFFSET])
@@ -431,21 +436,21 @@ frame_blink = [
 
 command_bytes = [90] * 64
 command_bytes[LEFT_GRIPPER_SERVO] = GRIPPER_OPEN_ANGLE
+command_bytes[RIGHT_GRIPPER_SERVO] = 180-GRIPPER_OPEN_ANGLE # right gripper is inversed
 command_bytes[LEFT_ELBOW_PITCH] = 135
 command_bytes[LEFT_ELBOW_YAW] = 90
 command_bytes[LEFT_SHOULDER_PITCH] = 180
 command_bytes[LEFT_SHOULDER_YAW] = 135
 command_bytes[HEAD_PITCH] = 90
 command_bytes[HEAD_YAW] = 90
-command_bytes[RIGHT_WRIST] = 90
 command_bytes[RIGHT_ELBOW_PITCH] = 55
 command_bytes[RIGHT_ELBOW_YAW] = 90
 command_bytes[RIGHT_SHOULDER_PITCH] = 0
 command_bytes[RIGHT_SHOULDER_YAW] = 45
 command_bytes[LEFT_WHEEL] = 0 + 127
 command_bytes[RIGHT_WHEEL] = 0 + 127
-#command_bytes[GRIPPER_SERVO] = GRIPPER_OPEN_ANGLE
 command_bytes[LEFT_WRIST] = 90
+command_bytes[RIGHT_WRIST] = 90
 
 INDEX_OFFSET = 0
 
@@ -472,6 +477,10 @@ while True:
     loopStart = monotonic()
     if demo:
         if (lastHeadMovement == None or loopStart-lastHeadMovement > 1):
+            #this functions basically as a janky timeout, so lets stop those wheels
+            #TODO: refactor to correct timeout
+            left_wheel.set_wheel_speed(127) #takes signed control byte where 127 = 0 speed
+            right_wheel.set_wheel_speed(127) #takes signed control byte where 127 = 0 speed
             if random() > 0.5:
                 if random() > 0.3:
                     command_bytes[HEAD_PITCH + INDEX_OFFSET] = int(random()*90) + 45
@@ -481,7 +490,7 @@ while True:
                     command_bytes[RIGHT_SHOULDER_PITCH + INDEX_OFFSET] = 55 + int(random()*91)
                     command_bytes[RIGHT_SHOULDER_YAW + INDEX_OFFSET] = 45 + int(random()*45)
                     command_bytes[RIGHT_WRIST + INDEX_OFFSET] = int(random()*181)
-#                     command_bytes[RIGHT_CLAW + INDEX_OFFSET] = int(random()*181)
+                    command_bytes[RIGHT_GRIPPER_SERVO + INDEX_OFFSET] = int(random()*90)
                 if random() > 0.67:
                     command_bytes[LEFT_SHOULDER_YAW + INDEX_OFFSET] = 135 - int(random()*45)
                     command_bytes[LEFT_SHOULDER_PITCH + INDEX_OFFSET] = int(random()*91)+90
@@ -533,4 +542,4 @@ while True:
     if loopLength < fixedLoop:
         sleep(fixedLoop - loopLength)
     #sleep(0.025 - monotonic() - loopStart)
-    print (str(monotonic() - loopStart))
+    #print (str(monotonic() - loopStart))
