@@ -5,17 +5,22 @@ from supervisor import runtime
 from time import sleep
 import adafruit_bno055
 from digitalio import DigitalInOut, Direction, Pull
+from analogio import AnalogIn
 from adafruit_motor import motor
 from pulseio import PWMOut
 
 #constants
 COMMAND_LENGTH = 20
 HEAD_YAW_START = 90
-HEAD_YAW_MAX = 165
-HEAD_YAW_MIN = 15
+HEAD_YAW_MAX = 180
+HEAD_YAW_MIN = 0
 HEAD_PITCH_START = 90
 HEAD_PITCH_MAX = 180
 HEAD_PITCH_MIN = 0
+LEFT_CLAW_OPEN = 180
+LEFT_CLAW_CLOSED = 0
+RIGHT_CLAW_OPEN = 135
+RIGHT_CLAW_CLOSED = 0
 
 #initialize servos for arms and head
 LEFT_CLAW = 0
@@ -23,7 +28,8 @@ LEFT_ELBOW_PITCH = 1
 LEFT_ELBOW_YAW = 2
 LEFT_SHOULDER_PITCH = 3
 LEFT_SHOULDER_YAW = 4
-RIGHT_CLAW = 11
+RIGHT_WRIST = 11
+RIGHT_CLAW = 10
 RIGHT_ELBOW_PITCH = 12
 RIGHT_ELBOW_YAW = 13
 RIGHT_SHOULDER_PITCH = 14
@@ -34,6 +40,7 @@ LEFT_WHEEL = 16
 RIGHT_WHEEL = 17
 PACKET_SIGNATURE = "ALICE"
 INDEX_OFFSET = len(PACKET_SIGNATURE)
+
 
 #init RF95
 spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
@@ -50,6 +57,23 @@ yawOffsetResetButton.direction = Direction.INPUT
 yawOffsetResetButton.pull = Pull.UP
 bno055yawStartingPosition = -1 #initialize variable
 
+leftGripperButton = DigitalInOut(board.A3)
+leftGripperButton.direction = Direction.INPUT
+leftGripperButton.pull = Pull.UP
+leftGripperButtonDebounce = False
+leftGripperClosed = False
+
+rightGripperButton = DigitalInOut(board.D10)
+rightGripperButton.direction = Direction.INPUT
+rightGripperButton.pull = Pull.UP
+rightGripperButtonDebounce = False
+rightGripperClosed = False
+
+leftRightStick_left = AnalogIn(board.A4)
+forwardBackStick_left = AnalogIn(board.A5)
+
+forwardBackStick_right = AnalogIn(board.A0)
+leftRightStick_right = AnalogIn(board.A1)
 
 def getDistanceFromStartingPostion(position, startingPosition):
     #need to figure out how to return the positive or negative angle differece given that 0-1 = 359.
@@ -93,8 +117,73 @@ def convertBNO055EulerToHeadAngles(sensorAngles,sensorYawZeroPosition):
     
     return (headYaw,headPitch)
 
+def processForwardBackStick(stick):
+    forwardBackStickMin = 256
+    forwardBackStickMax = 65520
+    forwardBackStickNeutralMax = 35000
+    forwardBackStickNeutralMin = 31000
+    forwardBackStickValue = stick.value
+    maxSpeed = 0.5
+
+    #figure out forward speed
+    if forwardBackStickValue > forwardBackStickMax: forwardBackStickValue = forwardBackStickMax
+    if forwardBackStickValue < forwardBackStickMin: forwardBackStickValue = forwardBackStickMin
+
+    forwardBackPct = 0.5
+    if forwardBackStickValue > forwardBackStickNeutralMax or forwardBackStickValue < forwardBackStickNeutralMin:
+        #inverted because forward is min and back is max due to physical orientation of stick
+        forwardBackPct = 1.0 - (float((forwardBackStickValue - forwardBackStickMin))/(float(forwardBackStickMax-forwardBackStickMin)))
+    return (int(forwardBackPct * 254 * maxSpeed) - int
+    
+    (127 * maxSpeed))
+
+def processLeftRightStick(stick):
+    min = 300
+    max = 65520
+    rightStart = 35000
+    leftStart = 31000
+    stickValue = stick.value
+    maxTurnSpeed = 0.3
+
+    if stickValue > max: stickValue = max
+    if stickValue < min: stickValue = min
+
+    #pct neutral = 0
+    #pct > 0 = right
+    #pct < 0 = left
+    pct = 0
+
+    #right 
+    if stickValue > rightStart:
+        pct = float(stickValue - rightStart) / float(max - rightStart)
+    if stickValue < leftStart:
+        pct = float(leftStart - stickValue) / float(leftStart-min) * -1
+    return round(pct * 127 * maxTurnSpeed)
+    
+def processGripperButtons():
+    global leftGripperButtonDebounce
+    global leftGripperClosed
+    global rightGripperButtonDebounce
+    global rightGripperClosed
+    leftButtonPressed = not leftGripperButton.value #False when button pressed
+    rightButtonPressed = not rightGripperButton.value
+
+    if leftButtonPressed and not leftGripperButtonDebounce:
+        leftGripperButtonDebounce = True
+        #toggle gripper
+        leftGripperClosed = not leftGripperClosed
+    elif not leftButtonPressed and leftGripperButtonDebounce:
+        leftGripperButtonDebounce = False
+
+    if rightButtonPressed and not rightGripperButtonDebounce:
+        rightGripperButtonDebounce = True
+        #toggle gripper
+        rightGripperClosed = not rightGripperClosed
+    elif not rightButtonPressed and rightGripperButtonDebounce:
+        rightGripperButtonDebounce = False   
+    
 command_bytes = [90] * COMMAND_LENGTH
-command_bytes[LEFT_CLAW] = 90
+command_bytes[LEFT_CLAW] = 180
 command_bytes[LEFT_ELBOW_PITCH] = 45
 command_bytes[LEFT_ELBOW_YAW] = 135
 command_bytes[LEFT_SHOULDER_PITCH] = 180
@@ -118,16 +207,45 @@ while True:
         if len(new_command) == COMMAND_LENGTH:
             #signed_command = bytearray(PACKET_SIGNATURE) + new_command
             command_bytes = new_command
+
     #now process data from the BNO055
     if (not yawOffsetResetButton.value):
         bno055yawStartingPosition = int(sensor.euler[0])
     elif (bno055yawStartingPosition >=0):
+        #now process data from joystick
+        command_bytes[RIGHT_WHEEL] = 0 + 127
+        command_bytes[LEFT_WHEEL] = 0 + 127
+        forwardBackSpeed = processForwardBackStick(forwardBackStick_left)
+        if forwardBackSpeed == 0:
+            forwardBackSpeed = processForwardBackStick(forwardBackStick_right) 
+
+        if forwardBackSpeed != 0:
+            command_bytes[RIGHT_WHEEL] = forwardBackSpeed + 127
+            command_bytes[LEFT_WHEEL] = forwardBackSpeed + 127
+        
+        leftRightSpeed = processLeftRightStick(leftRightStick_left)
+        if leftRightSpeed == 0:
+            leftRightSpeed = processLeftRightStick(leftRightStick_right)
+        if leftRightSpeed != 0:
+            command_bytes[RIGHT_WHEEL] = (-1 * leftRightSpeed) + 127
+            command_bytes[LEFT_WHEEL] = leftRightSpeed + 127
+
+        processGripperButtons()
+        if leftGripperClosed:
+            command_bytes[LEFT_CLAW] = LEFT_CLAW_CLOSED
+        else:
+            command_bytes[LEFT_CLAW] = LEFT_CLAW_OPEN
+
+        if rightGripperClosed:
+            command_bytes[RIGHT_CLAW] = RIGHT_CLAW_CLOSED
+        else:
+            command_bytes[RIGHT_CLAW] = RIGHT_CLAW_OPEN
+
         convertedHeadAngles = convertBNO055EulerToHeadAngles(sensor.euler,bno055yawStartingPosition)
         command_bytes[HEAD_YAW] = convertedHeadAngles[0]
         command_bytes[HEAD_PITCH] = convertedHeadAngles[1]
         signed_command = bytearray(PACKET_SIGNATURE) + bytearray(command_bytes)
         packet = rfm9x.send(signed_command)
-        print('Yaw: ' + str(command_bytes[HEAD_YAW]) + '\t\t\tPitch: ' + str(command_bytes[HEAD_PITCH]))
-   #  print(
-#         int(command_bytes[LEFT_WHEEL])
-#         )
+    else:
+        sleep(0.1)
+    
