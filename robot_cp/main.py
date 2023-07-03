@@ -20,6 +20,8 @@ MAX_SPEED = 1
 DELAY_THROTTLE = 0.8
 MIN_SPEED = 0.4
 MAX_WHEEL_DELAY = 0.2
+DEMO_SMOOTHING_FRACTION = 0.1
+MOCAP_SMOOTHING_FRACTION = 0.4
 
 #gripper_constants
 GRIPPER_TIGHTNESS = 30
@@ -157,6 +159,7 @@ def get_voltage(pin):
 
 #functions
 
+smoothing_fraction = DEMO_SMOOTHING_FRACTION
 def move_servo(index,command_bytes,index_offset = 0, smoothing=False):
    servo = servokit.servo[index]
    new_angle = command_bytes[index + index_offset]
@@ -168,7 +171,7 @@ def move_servo(index,command_bytes,index_offset = 0, smoothing=False):
                 # elif servo.angle - SMOOTHING_ANGLE > 0:
                 #     servo.angle-=SMOOTHING_ANGLE
 
-                servo.angle += (new_angle - servo.angle) * 0.1
+                servo.angle += (new_angle - servo.angle) * smoothing_fraction
 #                 smooth_angle = (new_angle - servo.angle) * 0.5
 #                 if (smooth_angle > SMOOTHING_ANGLE):
 #                     smooth_angle = SMOOTHING_ANGLE
@@ -477,6 +480,7 @@ while True:
     loopStart = monotonic()
     if demo:
         if (lastHeadMovement == None or loopStart-lastHeadMovement > 1):
+            smoothing_fraction = DEMO_SMOOTHING_FRACTION
             #this functions basically as a janky timeout, so lets stop those wheels
             #TODO: refactor to correct timeout
             left_wheel.set_wheel_speed(127) #takes signed control byte where 127 = 0 speed
@@ -506,6 +510,7 @@ while True:
             for i in range(INDEX_OFFSET):
                 signature_check+=chr(packet[i])
             if signature_check == PACKET_SIGNATURE:
+                smoothing_fraction = MOCAP_SMOOTHING_FRACTION
                 command_bytes = packet
     except UnicodeError as e:
         print("UnicodeError")
