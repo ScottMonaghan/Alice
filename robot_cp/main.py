@@ -547,4 +547,4 @@ while True:
     if loopLength < fixedLoop:
         sleep(fixedLoop - loopLength)
     #sleep(0.025 - monotonic() - loopStart)
-    #print (str(monotonic() - loopStart))
+    #print("RW:" + str(int(servokit.servo[RIGHT_WRIST].angle or -1))  + "\t\t\tREY:" + str(int(servokit.servo[RIGHT_ELBOW_YAW].angle or -1))) 

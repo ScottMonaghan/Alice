@@ -622,6 +622,7 @@ namespace alice_server
             command_bytes[HEAD_PITCH] = 90;
             command_bytes[HEAD_YAW] = 90;
             command_bytes[RIGHT_WRIST] = 90;
+            command_bytes[LEFT_WRIST] = 90;
             //command_bytes[RIGHT_GRIPPER] = 0;
             command_bytes[RIGHT_ELBOW_PITCH] = 55;
             command_bytes[RIGHT_ELBOW_YAW] = 90;
@@ -656,8 +657,8 @@ namespace alice_server
                     command_bytes[LEFT_SHOULDER_YAW] = (byte)robotJoints[LEFT_SHOULDER_YAW].Angle;
                     command_bytes[LEFT_ELBOW_YAW] = (byte)robotJoints[LEFT_ELBOW_YAW].Angle;
                     command_bytes[LEFT_ELBOW_PITCH] = (byte)robotJoints[LEFT_ELBOW_PITCH].Angle;
-                    command_bytes[RIGHT_WRIST] = (byte)(180-robotJoints[RIGHT_ELBOW_YAW].Angle);//robotJoints[RIGHT_WRIST].Angle;
-                    command_bytes[LEFT_WRIST] = (byte)(180 - robotJoints[LEFT_ELBOW_YAW].Angle);//robotJoints[RIGHT_WRIST].Angle;
+                    command_bytes[RIGHT_WRIST] = (byte)(180-robotJoints[RIGHT_ELBOW_YAW].Angle - 90 < 0 ? 0 : 180 - robotJoints[RIGHT_ELBOW_YAW].Angle - 90);//robotJoints[RIGHT_WRIST].Angle;
+                    command_bytes[LEFT_WRIST] = (byte)(180-robotJoints[LEFT_ELBOW_YAW].Angle + 90);//robotJoints[RIGHT_WRIST].Angle;
                     //command_bytes[LEFT_GRIPPER] = (byte)robotJoints[LEFT_GRIPPER].Angle;
                     //command_bytes[RIGHT_WHEEL] = ConvertSignedIntToByte(right_wheel_speed);
                     //command_bytes[LEFT_WHEEL] = ConvertSignedIntToByte(left_wheel_speed);
